@@ -1,11 +1,11 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - INTEGRA EMAILJS CON CLAVE PÚBLICA CORREGIDA (APP.JS)
+   PORTAL DICHTER & NEIRA - BOTÓN DE ELIMINAR SOLICITUDES Y AJUSTES (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v11';
+const STORAGE_KEY = 'dn_portal_requests_v12';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 
-// CREDANCIALES EMAILJS CONFIGURADAS
+// CREDENTIALES EMAILJS
 const EMAILJS_SERVICE_ID = 'service_b1jhrai';
 const EMAILJS_TEMPLATE_ID = 'template_cpy03f3';
 const EMAILJS_PUBLIC_KEY = 'OfXawgXmm_YWqDj4B';
@@ -22,11 +22,10 @@ let state = {
 // 1. INICIALIZACIÓN
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar SDK de EmailJS con la clave pública correcta
     try {
         if (typeof emailjs !== 'undefined') {
             emailjs.init(EMAILJS_PUBLIC_KEY);
-            console.log("EmailJS inicializado correctamente con clave:", EMAILJS_PUBLIC_KEY);
+            console.log("EmailJS inicializado.");
         }
     } catch (e) {
         console.error("Error al inicializar EmailJS:", e);
@@ -310,7 +309,22 @@ function addMockData() {
 }
 
 // ==========================================================================
-// 4. ENVÍO DE FORMULARIOS
+// 4. ELIMINACIÓN DE SOLICITUDES (FUNCIÓN NUEVA)
+// ==========================================================================
+function deleteRequest(id) {
+    if (confirm(`¿Estás seguro de eliminar la solicitud ${id}? Esta acción no se puede deshacer.`)) {
+        state.requests = state.requests.filter(r => r.id !== id);
+        saveToStorage();
+        renderAll();
+        if (state.activeTab === 'analytics') {
+            renderAnalyticsCharts();
+        }
+        showToast(`Solicitud ${id} eliminada correctamente.`, 'info');
+    }
+}
+
+// ==========================================================================
+// 5. ENVÍO DE FORMULARIOS
 // ==========================================================================
 function handleEncoladaSubmit(e) {
     e.preventDefault();
@@ -410,7 +424,7 @@ function handleReportingSubmit(e) {
 }
 
 // ==========================================================================
-// 5. ENVÍO REAL DE CORREOS A TRAVÉS DE EMAILJS + VISTA PREVIA
+// 6. ENVÍO REAL DE CORREOS VIA EMAILJS + VISTA PREVIA
 // ==========================================================================
 function sendSubmissionConfirmationEmail(req) {
     const toEmail = req.email || 'usuario@dichter-neira.com';
@@ -505,7 +519,7 @@ function sendResolutionTicketEmail(req) {
 }
 
 // ==========================================================================
-// 6. RENDERIZADO DE TABLAS E HISTORIALES
+// 7. RENDERIZADO DE TABLAS E HISTORIALES
 // ==========================================================================
 function renderMiniDashboard() {
     const containerTotal = document.getElementById('dash-total-count');
@@ -696,9 +710,14 @@ function renderAdminTable() {
                 <td><span class="chip-status ${isResolved ? 'resolved' : 'pending'}">${isResolved ? 'Resuelto' : 'Pendiente'}</span></td>
                 <td>${isResolved ? `<span style="font-family:var(--font-mono); color:var(--dn-green); font-weight:700;">${escapeHtml(req.ticketNumber)}</span>` : '<span style="color:var(--text-subtle);">-- Sin Ticket --</span>'}</td>
                 <td>
-                    <button class="btn-secondary btn-sm" onclick="openModal('${req.id}')">
-                        <i data-lucide="${isResolved ? 'edit-2' : 'check-square'}"></i> ${isResolved ? 'Editar' : 'Gestionar'}
-                    </button>
+                    <div class="action-buttons-cell">
+                        <button class="btn-secondary btn-sm" onclick="openModal('${req.id}')" title="Gestionar / Asignar ticket">
+                            <i data-lucide="${isResolved ? 'edit-2' : 'check-square'}"></i> ${isResolved ? 'Editar' : 'Gestionar'}
+                        </button>
+                        <button class="btn-danger btn-sm" onclick="deleteRequest('${req.id}')" title="Eliminar solicitud">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -734,7 +753,7 @@ function renderAll() {
 }
 
 // ==========================================================================
-// 7. TIEMPO PROMEDIO Y ANALYTICS
+// 8. TIEMPO PROMEDIO Y ANALYTICS
 // ==========================================================================
 function calcAvgResponseTimeForAnalyst(analystName) {
     const resolvedReqs = state.requests.filter(r => r.analyst === analystName && r.status === 'RESOLVED' && r.createdAt && r.resolvedAt);
@@ -887,7 +906,7 @@ function renderAnalyticsCharts() {
 }
 
 // ==========================================================================
-// 8. MODAL DE GESTIÓN Y RESPUESTA DE TICKET
+// 9. MODAL DE GESTIÓN Y ASIGNACIÓN DE TICKET
 // ==========================================================================
 function openModal(id) {
     const req = state.requests.find(r => r.id === id);
@@ -953,7 +972,7 @@ function saveModalResponse() {
 }
 
 // ==========================================================================
-// 9. VISTA PREVIA CORREOS
+// 10. VISTA PREVIA CORREOS
 // ==========================================================================
 function openEmailPreviewModal(toEmail, subject, htmlBody) {
     document.getElementById('email-preview-to').textContent = toEmail;
@@ -968,7 +987,7 @@ function closeEmailPreviewModal() {
 }
 
 // ==========================================================================
-// 10. UTILS
+// 11. UTILS
 // ==========================================================================
 function exportToCSV() {
     if (state.requests.length === 0) {
