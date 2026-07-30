@@ -1,22 +1,70 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - BOTÓN DE ELIMINAR SOLICITUDES Y AJUSTES (APP.JS)
+   PORTAL DICHTER & NEIRA - BANNER SOLO SI HOY ES FESTIVO O VACACIONES (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v12';
+const STORAGE_KEY = 'dn_portal_requests_v18';
+const NOVEDADES_KEY = 'dn_portal_novedades_v2';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 
-// CREDENTIALES EMAILJS
+// CREDENCIALES EMAILJS
 const EMAILJS_SERVICE_ID = 'service_b1jhrai';
 const EMAILJS_TEMPLATE_ID = 'template_cpy03f3';
 const EMAILJS_PUBLIC_KEY = 'OfXawgXmm_YWqDj4B';
 
+// CORREOS DEL EQUIPO DE REPORTING (RECIBEN COPIA DE TODAS LAS SOLICITUDES)
+const REPORTING_TEAM_EMAILS = [
+    'masanchez@dichter-neira.com',
+    'jchimbi@dichter-neira.com'
+];
+
 let state = {
     requests: [],
+    analystStatus: [
+        {
+            analyst: 'Mayumi Sanchez',
+            status: 'DISPONIBLE',
+            dateStart: '',
+            dateEnd: '',
+            dates: 'Disponible todo el periodo',
+            note: '🟢 Laborando en horario regular. Atendiendo solicitudes de Power BI y Encoladas.'
+        },
+        {
+            analyst: 'Juliana Chimbi',
+            status: 'VACACIONES',
+            dateStart: '2026-08-15',
+            dateEnd: '2026-08-25',
+            dates: 'Del 15/08/2026 al 25/08/2026',
+            note: '🏖️ En periodo de vacaciones. Durante estos días Mayumi Sanchez estará atendiendo y respaldando sus tareas.'
+        }
+    ],
     isReportingAuthenticated: false,
     activeTab: 'encoladas',
     activeModalId: null,
     charts: {}
 };
+
+// Festivos Oficiales de Colombia 2026
+const colombianHolidays2026 = [
+    { iso: '2026-01-01', dateLabel: '1 Enero', day: 'Jueves', name: 'Año Nuevo' },
+    { iso: '2026-01-12', dateLabel: '12 Enero', day: 'Lunes', name: 'Día de los Reyes Magos' },
+    { iso: '2026-03-23', dateLabel: '23 Marzo', day: 'Lunes', name: 'Día de San José' },
+    { iso: '2026-04-02', dateLabel: '2 Abril', day: 'Jueves', name: 'Jueves Santo' },
+    { iso: '2026-04-03', dateLabel: '3 Abril', day: 'Viernes', name: 'Viernes Santo' },
+    { iso: '2026-05-01', dateLabel: '1 Mayo', day: 'Viernes', name: 'Día del Trabajo' },
+    { iso: '2026-05-18', dateLabel: '18 Mayo', day: 'Lunes', name: 'Día de la Ascensión' },
+    { iso: '2026-06-08', dateLabel: '8 Junio', day: 'Lunes', name: 'Corpus Christi' },
+    { iso: '2026-06-15', dateLabel: '15 Junio', day: 'Lunes', name: 'Sagrado Corazón de Jesús' },
+    { iso: '2026-06-29', dateLabel: '29 Junio', day: 'Lunes', name: 'San Pedro y San Pablo' },
+    { iso: '2026-07-20', dateLabel: '20 Julio', day: 'Lunes', name: 'Día de la Independencia de Colombia' },
+    { iso: '2026-07-29', dateLabel: '29 Julio', day: 'Miércoles', name: 'Día de Conmemoras D&N' },
+    { iso: '2026-08-07', dateLabel: '7 Agosto', day: 'Viernes', name: 'Batalla de Boyacá' },
+    { iso: '2026-08-17', dateLabel: '17 Agosto', day: 'Lunes', name: 'La Asunción de la Virgen' },
+    { iso: '2026-10-12', dateLabel: '12 Octubre', day: 'Lunes', name: 'Día de la Raza' },
+    { iso: '2026-11-02', dateLabel: '2 Noviembre', day: 'Lunes', name: 'Día de Todos los Santos' },
+    { iso: '2026-11-16', dateLabel: '16 Noviembre', day: 'Lunes', name: 'Independencia de Cartagena' },
+    { iso: '2026-12-08', dateLabel: '8 Diciembre', day: 'Martes', name: 'Día de la Inmaculada Concepción' },
+    { iso: '2026-12-25', dateLabel: '25 Diciembre', day: 'Viernes', name: 'Navidad' }
+];
 
 // ==========================================================================
 // 1. INICIALIZACIÓN
@@ -32,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadFromStorage();
+    loadNovedadesFromStorage();
 
     if (state.requests.length === 0) {
         seedInitialMockData();
@@ -44,17 +93,145 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateHeaderSessionUI();
     renderAll();
+    renderNovedades();
+    renderVacacionesAdminTable();
+    checkTodayNovelty();
+
     lucide.createIcons();
 });
 
 // ==========================================================================
-// 2. NAVEGACIÓN Y SESIÓN
+// 2. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS
+// ==========================================================================
+function handleFileSelect(inputElem, targetInfoId) {
+    const target = document.getElementById(targetInfoId);
+    if (!target) return;
+
+    if (inputElem.files && inputElem.files[0]) {
+        const file = inputElem.files[0];
+        const isImage = file.type.startsWith('image/');
+        const iconName = isImage ? 'image' : 'file-spreadsheet';
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            inputElem.dataset.fileDataUrl = e.target.result;
+            inputElem.dataset.fileName = file.name;
+
+            target.innerHTML = `
+                <span class="file-attached-chip clickable">
+                    <i data-lucide="${iconName}"></i>
+                    <span>Adjunto preparado: <strong>${escapeHtml(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)</span>
+                </span>
+            `;
+            lucide.createIcons();
+        };
+        reader.readAsDataURL(file);
+    } else {
+        inputElem.dataset.fileDataUrl = '';
+        inputElem.dataset.fileName = '';
+        target.innerHTML = '';
+    }
+}
+
+function downloadRequestFile(reqId) {
+    const req = state.requests.find(r => r.id === reqId);
+    if (!req || !req.fileName) {
+        showToast('No se encontró archivo adjunto para esta solicitud', 'warning');
+        return;
+    }
+
+    if (req.fileDataUrl) {
+        const link = document.createElement('a');
+        link.href = req.fileDataUrl;
+        link.download = req.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`Descargando: ${req.fileName}`, 'success');
+    } else {
+        const isCsv = req.fileName.endsWith('.csv');
+        const content = `ID_Solicitud,Categoria,Estudio,Pais,Detalle,Fecha\n${req.id},"${req.category}","${req.estudio}","${req.pais}","${(req.detalle || '').replace(/"/g, '""')}",${new Date().toISOString().slice(0,10)}`;
+        const blob = new Blob([content], { type: isCsv ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = req.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast(`Descargando archivo adjunto: ${req.fileName}`, 'success');
+    }
+}
+
+function renderFileChip(req) {
+    if (!req.fileName) return '';
+    const isImage = req.fileName.match(/\.(png|jpg|jpeg|gif|svg)$/i);
+    const iconName = isImage ? 'image' : 'file-spreadsheet';
+
+    return `
+        <button type="button" class="file-attached-chip clickable" onclick="downloadRequestFile('${req.id}')" title="Haz clic para descargar ${escapeHtml(req.fileName)}">
+            <i data-lucide="${iconName}"></i>
+            <span>📎 ${escapeHtml(req.fileName)}</span>
+            <i data-lucide="download" style="width:12px; margin-left:4px;"></i>
+        </button>
+    `;
+}
+
+// ==========================================================================
+// 3. VERIFICACIÓN Y ALERTA AUTOMÁTICA DE NOVEDADES DEL DÍA (EVALÚA FECHA ACTUAL)
+// ==========================================================================
+function checkTodayNovelty() {
+    const banner = document.getElementById('today-alert-banner');
+    const titleElem = document.getElementById('today-banner-title');
+    const msgElem = document.getElementById('today-banner-msg');
+    const iconElem = document.getElementById('today-banner-icon');
+
+    if (!banner || !titleElem || !msgElem) return;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayHoliday = colombianHolidays2026.find(h => h.iso === todayStr);
+
+    // Evalúa si HOY cae dentro del rango de vacaciones o día libre de alguna analista
+    const absentAnalyst = state.analystStatus.find(a => {
+        if (a.status !== 'VACACIONES' && a.status !== 'DIA_LIBRE') return false;
+        if (a.dateStart && a.dateEnd) {
+            return todayStr >= a.dateStart && todayStr <= a.dateEnd;
+        }
+        return false;
+    });
+
+    if (todayHoliday) {
+        titleElem.textContent = `🇨🇴 ¡Hoy es Día Festivo en Colombia: ${todayHoliday.name}!`;
+        msgElem.textContent = `El equipo de Reporting se encuentra en día no laborable. Las solicitudes ingresadas hoy serán atendidas a primera hora del próximo día hábil.`;
+        if (iconElem) iconElem.innerHTML = `<i data-lucide="calendar-off"></i>`;
+        banner.classList.remove('hidden');
+    } else if (absentAnalyst) {
+        titleElem.textContent = `📢 Novedad de Analista: ${absentAnalyst.analyst}`;
+        msgElem.textContent = `${absentAnalyst.note} (${absentAnalyst.dates})`;
+        if (iconElem) iconElem.innerHTML = `<i data-lucide="plane"></i>`;
+        banner.classList.remove('hidden');
+    } else {
+        banner.classList.add('hidden');
+    }
+
+    lucide.createIcons();
+}
+
+function closeTodayBanner() {
+    const banner = document.getElementById('today-alert-banner');
+    if (banner) banner.classList.add('hidden');
+}
+
+// ==========================================================================
+// 4. NAVEGACIÓN Y SESIÓN (INCLUYE PESTAÑA DEDICADA DE VACACIONES)
 // ==========================================================================
 function updateHeaderSessionUI() {
     const badgeLabel = document.getElementById('session-label');
     const loginBtn = document.getElementById('btn-reporting-login');
     const logoutBtn = document.getElementById('btn-logout');
     const navAdminBtn = document.getElementById('nav-btn-admin');
+    const navVacacionesBtn = document.getElementById('nav-btn-vacaciones');
     const navAnalyticsBtn = document.getElementById('nav-btn-analytics');
 
     if (state.isReportingAuthenticated) {
@@ -63,6 +240,7 @@ function updateHeaderSessionUI() {
         if (logoutBtn) logoutBtn.classList.remove('hidden');
 
         if (navAdminBtn) navAdminBtn.classList.remove('hidden');
+        if (navVacacionesBtn) navVacacionesBtn.classList.remove('hidden');
         if (navAnalyticsBtn) navAnalyticsBtn.classList.remove('hidden');
     } else {
         if (badgeLabel) badgeLabel.textContent = 'Modo Operaciones (Público)';
@@ -70,6 +248,7 @@ function updateHeaderSessionUI() {
         if (logoutBtn) logoutBtn.classList.add('hidden');
 
         if (navAdminBtn) navAdminBtn.classList.add('hidden');
+        if (navVacacionesBtn) navVacacionesBtn.classList.add('hidden');
         if (navAnalyticsBtn) navAnalyticsBtn.classList.add('hidden');
     }
     lucide.createIcons();
@@ -94,7 +273,7 @@ function handleReportingAuth(e) {
         closeReportingAuthModal();
         updateHeaderSessionUI();
         switchTab('admin');
-        showToast('¡Desbloqueadas pestañas de Reporting y Analytics!', 'success');
+        showToast('¡Desbloqueadas pestañas de Reporting, Vacaciones y Analytics!', 'success');
     } else {
         showToast('Credenciales de Reporting incorrectas', 'warning');
     }
@@ -109,7 +288,7 @@ function logoutReporting() {
 }
 
 function switchTab(tabId) {
-    if ((tabId === 'admin' || tabId === 'analytics') && !state.isReportingAuthenticated) {
+    if ((tabId === 'admin' || tabId === 'vacaciones' || tabId === 'analytics') && !state.isReportingAuthenticated) {
         openReportingAuthModal();
         return;
     }
@@ -127,7 +306,11 @@ function switchTab(tabId) {
 
     renderAll();
 
-    if (tabId === 'analytics') {
+    if (tabId === 'novedades') {
+        renderNovedades();
+    } else if (tabId === 'vacaciones') {
+        renderVacacionesAdminTable();
+    } else if (tabId === 'analytics') {
         setTimeout(renderAnalyticsCharts, 100);
     }
 
@@ -170,7 +353,7 @@ function toggleBiFields(type) {
 }
 
 // ==========================================================================
-// 3. PERSISTENCIA DE DATOS Y SEED DEMO
+// 5. PERSISTENCIA DE DATOS
 // ==========================================================================
 function loadFromStorage() {
     try {
@@ -190,6 +373,25 @@ function saveToStorage() {
     }
 }
 
+function loadNovedadesFromStorage() {
+    try {
+        const raw = localStorage.getItem(NOVEDADES_KEY);
+        if (raw) {
+            state.analystStatus = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error("Error al cargar novedades de localStorage", e);
+    }
+}
+
+function saveNovedadesToStorage() {
+    try {
+        localStorage.setItem(NOVEDADES_KEY, JSON.stringify(state.analystStatus));
+    } catch (e) {
+        console.error("Error al guardar novedades en localStorage", e);
+    }
+}
+
 function seedInitialMockData() {
     const now = new Date();
     state.requests = [
@@ -206,6 +408,8 @@ function seedInitialMockData() {
             solicitante: 'Carlos Mendoza',
             analyst: 'Mayumi Sanchez',
             detalle: 'Cierre de lote bloqueado en 2 terminales por error 502.',
+            fileName: 'Reporte_Captura_KO.xlsx',
+            fileDataUrl: null,
             status: 'RESOLVED',
             ticketNumber: 'TCK-DN-2026-9011',
             resolutionNote: 'Procesado y liberado desde la consola central.',
@@ -225,11 +429,15 @@ function seedInitialMockData() {
             solicitante: 'Laura Restrepo',
             analyst: 'Juliana Chimbi',
             detalle: 'Favor revisar si existen encoladas pendientes para Heineken México.',
-            status: 'RESOLVED',
-            ticketNumber: 'TCK-DN-2026-9042',
-            resolutionNote: 'Revisado. Se encontraron 3 transacciones y fueron procesadas.',
+            fileName: null,
+            fileDataUrl: null,
+            status: 'IN_PROGRESS',
+            deliveryDate: '2026-08-05',
+            inProgressNote: 'Según la conversación sostenida con Laura, se conciliarán los datos para entregar el 5 de Agosto.',
+            ticketNumber: null,
+            resolutionNote: null,
             createdAt: new Date(now.getTime() - 40 * 3600000).toISOString(),
-            resolvedAt: new Date(now.getTime() - 22 * 3600000).toISOString()
+            resolvedAt: null
         },
         {
             id: 'REQ-1003',
@@ -242,6 +450,8 @@ function seedInitialMockData() {
             solicitante: 'Mariana López',
             analyst: 'Mayumi Sanchez',
             detalle: 'Desarrollar tablero interactivo semanal de seguimiento de precios.',
+            fileName: 'Maqueta_PowerBI_PG.png',
+            fileDataUrl: null,
             status: 'PENDING',
             ticketNumber: null,
             resolutionNote: null,
@@ -308,9 +518,6 @@ function addMockData() {
     showToast('Solicitud simulada agregada', 'success');
 }
 
-// ==========================================================================
-// 4. ELIMINACIÓN DE SOLICITUDES (FUNCIÓN NUEVA)
-// ==========================================================================
 function deleteRequest(id) {
     if (confirm(`¿Estás seguro de eliminar la solicitud ${id}? Esta acción no se puede deshacer.`)) {
         state.requests = state.requests.filter(r => r.id !== id);
@@ -324,7 +531,173 @@ function deleteRequest(id) {
 }
 
 // ==========================================================================
-// 5. ENVÍO DE FORMULARIOS
+// 6. GESTIÓN PÁGINA INDEPENDIENTE DE VACACIONES & NOVEDADES
+// ==========================================================================
+function handleNovedadSubmit(e) {
+    e.preventDefault();
+
+    const analystName = document.getElementById('nov-analyst').value;
+    const statusVal = document.getElementById('nov-status').value;
+    const dateStart = document.getElementById('nov-date-start').value;
+    const dateEnd = document.getElementById('nov-date-end').value;
+    const noteVal = document.getElementById('nov-note').value.trim();
+
+    let datesFormatted = 'Periodo actual';
+    if (dateStart && dateEnd) {
+        const d1 = new Date(dateStart + 'T00:00:00').toLocaleDateString('es-CO');
+        const d2 = new Date(dateEnd + 'T00:00:00').toLocaleDateString('es-CO');
+        datesFormatted = `Del ${d1} al ${d2}`;
+    }
+
+    const existingIndex = state.analystStatus.findIndex(a => a.analyst === analystName);
+    const updatedStatus = {
+        analyst: analystName,
+        status: statusVal,
+        dateStart: dateStart,
+        dateEnd: dateEnd,
+        dates: datesFormatted,
+        note: noteVal
+    };
+
+    if (existingIndex !== -1) {
+        state.analystStatus[existingIndex] = updatedStatus;
+    } else {
+        state.analystStatus.push(updatedStatus);
+    }
+
+    saveNovedadesToStorage();
+    document.getElementById('form-analyst-novedad').reset();
+    renderNovedades();
+    renderVacacionesAdminTable();
+    checkTodayNovelty();
+    showToast(`Novedad publicada con éxito para ${analystName}`, 'success');
+}
+
+function deleteNovedad(index) {
+    const item = state.analystStatus[index];
+    if (!item) return;
+
+    if (confirm(`¿Estás seguro de eliminar el registro de vacaciones/novedad de ${item.analyst}?`)) {
+        state.analystStatus.splice(index, 1);
+        saveNovedadesToStorage();
+        renderNovedades();
+        renderVacacionesAdminTable();
+        checkTodayNovelty();
+        showToast('Novedad eliminada correctamente.', 'info');
+    }
+}
+
+function renderVacacionesAdminTable() {
+    const tbody = document.getElementById('vacaciones-admin-table-body');
+    if (!tbody) return;
+
+    if (state.analystStatus.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-muted);">No hay novedades o vacaciones registradas.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = state.analystStatus.map((item, idx) => {
+        let badgeClass = 'available';
+        let statusLabel = '🟢 Disponible';
+        if (item.status === 'VACACIONES') {
+            badgeClass = 'vacaciones';
+            statusLabel = '🏖️ Vacaciones';
+        } else if (item.status === 'DIA_LIBRE') {
+            badgeClass = 'dia_libre';
+            statusLabel = '🌴 Día Libre';
+        } else if (item.status === 'CAPACITACION') {
+            badgeClass = 'capacitacion';
+            statusLabel = '📚 Capacitación';
+        }
+
+        return `
+            <tr>
+                <td><strong>${escapeHtml(item.analyst)}</strong></td>
+                <td><span class="status-badge ${badgeClass}">${statusLabel}</span></td>
+                <td>
+                    <span style="font-size:0.8rem; color:var(--text-dark);">${escapeHtml(item.dates)}</span>
+                    <br><small style="color:var(--text-muted);">${escapeHtml(item.note)}</small>
+                </td>
+                <td>
+                    <button class="btn-danger btn-sm" onclick="deleteNovedad(${idx})" title="Eliminar / Quitar Novedad">
+                        <i data-lucide="trash-2"></i> Eliminar
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    lucide.createIcons();
+}
+
+function renderNovedades() {
+    const containerAnalysts = document.getElementById('analyst-status-feed');
+    if (containerAnalysts) {
+        if (state.analystStatus.length === 0) {
+            containerAnalysts.innerHTML = `<p style="text-align:center; padding:20px; color:var(--text-muted);">Todas las analistas están disponibles actualmente.</p>`;
+        } else {
+            containerAnalysts.innerHTML = state.analystStatus.map(item => {
+                const isLeave = item.status === 'VACACIONES' || item.status === 'DIA_LIBRE';
+                let statusText = '🟢 Disponible';
+                let badgeClass = 'available';
+
+                if (item.status === 'VACACIONES') {
+                    statusText = '🏖️ En Vacaciones';
+                    badgeClass = 'vacaciones';
+                } else if (item.status === 'DIA_LIBRE') {
+                    statusText = '🌴 Día Libre';
+                    badgeClass = 'dia_libre';
+                } else if (item.status === 'CAPACITACION') {
+                    statusText = '📚 En Capacitación';
+                    badgeClass = 'capacitacion';
+                }
+
+                return `
+                    <div class="analyst-status-card ${isLeave ? 'on-leave' : 'available'}">
+                        <div class="analyst-card-top">
+                            <span class="analyst-name-bold">
+                                <i data-lucide="user-check"></i> ${escapeHtml(item.analyst)}
+                            </span>
+                            <span class="status-badge ${badgeClass}">${statusText}</span>
+                        </div>
+                        <div class="analyst-note-text">${escapeHtml(item.note)}</div>
+                        ${item.dates ? `<div class="analyst-dates-sub">📅 ${escapeHtml(item.dates)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    const containerHolidays = document.getElementById('holidays-container');
+    const badgeCount = document.getElementById('holidays-count-badge');
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const futureHolidays = colombianHolidays2026.filter(h => h.iso >= todayStr);
+
+    if (badgeCount) {
+        badgeCount.textContent = `${futureHolidays.length} próximos festivos`;
+    }
+
+    if (containerHolidays) {
+        if (futureHolidays.length === 0) {
+            containerHolidays.innerHTML = `<p style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-muted);">No hay más festivos restantes en el año.</p>`;
+        } else {
+            containerHolidays.innerHTML = futureHolidays.map(h => `
+                <div class="holiday-item">
+                    <div class="holiday-date-box">
+                        <div class="holiday-day">${escapeHtml(h.dateLabel)}</div>
+                        <div class="holiday-month">${escapeHtml(h.day)}</div>
+                    </div>
+                    <div class="holiday-name">${escapeHtml(h.name)}</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    lucide.createIcons();
+}
+
+// ==========================================================================
+// 7. ENVÍO DE FORMULARIOS CON ARCHIVOS ADJUNTOS
 // ==========================================================================
 function handleEncoladaSubmit(e) {
     e.preventDefault();
@@ -336,6 +709,10 @@ function handleEncoladaSubmit(e) {
     const ola = document.getElementById('enc-ola').value;
     const solicitante = document.getElementById('enc-solicitante').value.trim() || 'Operaciones D&N';
     const observaciones = document.getElementById('enc-observaciones').value.trim() || 'Sin observaciones.';
+
+    const fileInput = document.getElementById('enc-file');
+    let fileName = fileInput?.dataset?.fileName || null;
+    let fileDataUrl = fileInput?.dataset?.fileDataUrl || null;
 
     let pdvCodes = [];
     let isGeneralReview = false;
@@ -364,6 +741,8 @@ function handleEncoladaSubmit(e) {
         solicitante: solicitante,
         analyst: null,
         detalle: observaciones,
+        fileName: fileName,
+        fileDataUrl: fileDataUrl,
         status: 'PENDING',
         ticketNumber: null,
         resolutionNote: null,
@@ -375,6 +754,7 @@ function handleEncoladaSubmit(e) {
     saveToStorage();
 
     document.getElementById('form-encoladas').reset();
+    document.getElementById('enc-file-info').innerHTML = '';
     renderAll();
 
     sendSubmissionConfirmationEmail(newReq);
@@ -389,6 +769,10 @@ function handleReportingSubmit(e) {
     const pais = document.getElementById('rep-pais').value;
     const detalle = document.getElementById('rep-solicitud-detalle').value.trim();
 
+    const fileInput = document.getElementById('rep-file');
+    let fileName = fileInput?.dataset?.fileName || null;
+    let fileDataUrl = fileInput?.dataset?.fileDataUrl || null;
+
     const newReq = {
         id: 'REQ-' + (1000 + state.requests.length + 1),
         category: biType === 'EXISTING' ? 'BI_EXISTING' : 'BI_NEW',
@@ -397,6 +781,8 @@ function handleReportingSubmit(e) {
         pais: pais,
         analyst: null,
         detalle: detalle,
+        fileName: fileName,
+        fileDataUrl: fileDataUrl,
         status: 'PENDING',
         ticketNumber: null,
         resolutionNote: null,
@@ -418,29 +804,33 @@ function handleReportingSubmit(e) {
     saveToStorage();
 
     document.getElementById('form-reporting').reset();
+    document.getElementById('rep-file-info').innerHTML = '';
     renderAll();
 
     sendSubmissionConfirmationEmail(newReq);
 }
 
 // ==========================================================================
-// 6. ENVÍO REAL DE CORREOS VIA EMAILJS + VISTA PREVIA
+// 8. ENVÍO REAL DE CORREOS Y NOTIFICACIONES A USUARIO Y EQUIPO DE REPORTING
 // ==========================================================================
 function sendSubmissionConfirmationEmail(req) {
-    const toEmail = req.email || 'usuario@dichter-neira.com';
+    const userEmail = req.email || 'usuario@dichter-neira.com';
     const isEncolada = req.category === 'ENCOLADA';
 
+    const allRecipients = [userEmail, ...REPORTING_TEAM_EMAILS];
+    const recipientsStr = allRecipients.join(', ');
+
     const subject = isEncolada 
-        ? `[Confirmación] Solicitud de Encolada ${req.id} Recibida - Dichter & Neira`
-        : `[Confirmación] Solicitud de Reporting ${req.id} Recibida - Dichter & Neira`;
+        ? `[Nueva Solicitud ${req.id}] Encolada PDV: ${req.estudio} (${req.pais})`
+        : `[Nueva Solicitud ${req.id}] Reporting Power BI: ${req.estudio} (${req.pais})`;
 
     const commitmentMsg = isEncolada
-        ? '⏳ <strong>Tu solicitud se revisará en un máximo de 2 días hábiles.</strong>'
-        : '⏳ <strong>El equipo de Reporting se contactará contigo en un plazo máximo de 3 días hábiles para evaluar la solicitud y dar fechas de entrega estimadas.</strong>';
+        ? '⏳ <strong>La solicitud se revisará en un máximo de 2 días hábiles (Equipo ubicado en Colombia).</strong>'
+        : '⏳ <strong>El equipo de Reporting (Colombia) se contactará en un plazo máximo de 3 días hábiles.</strong>';
 
     const htmlBody = `
-        <p>Hola <strong>${escapeHtml(req.solicitante || 'Equipo Operaciones')}</strong>,</p>
-        <p>Hemos recibido correctamente tu solicitud en el Portal de Dichter & Neira.</p>
+        <p>Hola <strong>${escapeHtml(req.solicitante || 'Equipo Dichter & Neira')}</strong>,</p>
+        <p>Se ha recibido correctamente una nueva solicitud en el Portal de Dichter & Neira.</p>
         
         <div style="background:rgba(13,92,171,0.08); border-left:4px solid #0D5CAB; padding:14px; margin:14px 0; border-radius:6px; font-size:0.9rem;">
             ${commitmentMsg}
@@ -448,45 +838,94 @@ function sendSubmissionConfirmationEmail(req) {
 
         <div class="email-card-box">
             <div><strong>Folio ID:</strong> ${escapeHtml(req.id)}</div>
+            <div><strong>Solicitante:</strong> ${escapeHtml(req.solicitante)} (${escapeHtml(req.email)})</div>
             <div><strong>Categoría:</strong> ${escapeHtml(req.category)}</div>
             <div><strong>Estudio:</strong> ${escapeHtml(req.estudio)} | <strong>País:</strong> ${escapeHtml(req.pais)}</div>
-            ${req.pdvCode ? `<div><strong>Detalle / PDV:</strong> ${escapeHtml(req.pdvCode)}</div>` : ''}
+            ${req.pdvCode ? `<div><strong>Detalle / PDVs:</strong> ${escapeHtml(req.pdvCode)}</div>` : ''}
+            ${req.fileName ? `<div><strong>Archivo Adjunto:</strong> 📎 ${escapeHtml(req.fileName)}</div>` : ''}
             <div><strong>Detalle del Requerimiento:</strong> "${escapeHtml(req.detalle)}"</div>
         </div>
 
-        <p style="font-size:0.8rem; color:#64748B;">Te enviaremos una notificación cuando Mayumi Sanchez o Juliana Chimbi procesen la solicitud.</p>
+        <p style="font-size:0.8rem; color:#64748B;">Notificación enviada a: ${escapeHtml(recipientsStr)}</p>
     `;
 
-    openEmailPreviewModal(toEmail, subject, htmlBody);
+    openEmailPreviewModal(recipientsStr, subject, htmlBody);
 
     if (typeof emailjs !== 'undefined') {
-        const templateParams = {
-            to_email: toEmail,
-            subject: subject,
-            message: htmlBody,
-            name: 'Reporting Dichter & Neira'
-        };
+        allRecipients.forEach(email => {
+            const templateParams = {
+                to_email: email,
+                subject: subject,
+                message: htmlBody,
+                name: 'Reporting Dichter & Neira'
+            };
 
-        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-            .then(function(response) {
-                console.log('EMAILJS SUCCESS!', response.status, response.text);
-                showToast(`📧 ¡Correo REAL enviado exitosamente a: ${toEmail}!`, 'success');
-            }, function(error) {
-                console.error('EMAILJS FAILED...', error);
-                showToast(`📧 Vista previa en pantalla (Respuesta EmailJS: ${error.text || 'verificar cuenta'})`, 'info');
-            });
-    } else {
-        showToast(`📧 Vista previa de correo en pantalla generada`, 'success');
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+                .then(function() {
+                    console.log(`EmailJS enviado exitosamente a: ${email}`);
+                }, function(error) {
+                    console.error(`Error enviando EmailJS a ${email}:`, error);
+                });
+        });
+
+        showToast(`📧 ¡Notificación enviada a ${userEmail} y al Equipo de Reporting (${REPORTING_TEAM_EMAILS.join(', ')})!`, 'success');
+    }
+}
+
+function sendInProgressEmail(req) {
+    const userEmail = req.email || 'usuario@dichter-neira.com';
+    const allRecipients = [userEmail, ...REPORTING_TEAM_EMAILS];
+    const recipientsStr = allRecipients.join(', ');
+
+    const subject = `[En Proceso] Actualización Solicitud ${req.id} - Fecha de Entrega Acordada`;
+    const deliveryFormatted = req.deliveryDate ? new Date(req.deliveryDate + 'T00:00:00').toLocaleDateString('es-CO') : 'Por acordar';
+
+    const htmlBody = `
+        <p>Hola <strong>${escapeHtml(req.solicitante || 'Solicitante')}</strong>,</p>
+        <p>La solicitud <strong>${req.id}</strong> ha sido revisada por la analista <strong>${escapeHtml(req.analyst)}</strong> de Reporting y ha pasado a estado <strong>🔵 EN PROCESO</strong>.</p>
+        
+        <div style="background:rgba(51,189,238,0.12); border-left:4px solid #0D5CAB; padding:16px; margin:14px 0; border-radius:6px;">
+            <div style="font-size:0.95rem; font-weight:700; color:#0D5CAB; margin-bottom:6px;">
+                📅 Según la conversación sostenida, la fecha estimada de entrega es: <strong>${deliveryFormatted}</strong>
+            </div>
+            <div style="font-size:0.85rem; color:#1E293B;">
+                <strong>Detalles del Acuerdo:</strong> "${escapeHtml(req.inProgressNote || 'En proceso de desarrollo y conciliación.')}"
+            </div>
+        </div>
+
+        <div class="email-card-box">
+            <div><strong>Solicitud ID:</strong> ${escapeHtml(req.id)}</div>
+            <div><strong>Analista Asignada:</strong> ${escapeHtml(req.analyst)}</div>
+            <div><strong>Estudio:</strong> ${escapeHtml(req.estudio)} | <strong>País:</strong> ${escapeHtml(req.pais)}</div>
+        </div>
+    `;
+
+    openEmailPreviewModal(recipientsStr, subject, htmlBody);
+
+    if (typeof emailjs !== 'undefined') {
+        allRecipients.forEach(email => {
+            const templateParams = {
+                to_email: email,
+                subject: subject,
+                message: htmlBody,
+                name: 'Reporting Dichter & Neira'
+            };
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+        });
+        showToast(`📧 ¡Notificación de Estado En Proceso enviada a ${userEmail} y al equipo de Reporting!`, 'success');
     }
 }
 
 function sendResolutionTicketEmail(req) {
-    const toEmail = req.email || 'usuario@dichter-neira.com';
+    const userEmail = req.email || 'usuario@dichter-neira.com';
+    const allRecipients = [userEmail, ...REPORTING_TEAM_EMAILS];
+    const recipientsStr = allRecipients.join(', ');
+
     const subject = `[Ticket Asignado] Solución Solicitud ${req.id} - D&N`;
 
     const htmlBody = `
         <p>Hola <strong>${escapeHtml(req.solicitante || 'Solicitante')}</strong>,</p>
-        <p>Tu solicitud ha sido atendida por la analista <strong>${escapeHtml(req.analyst)}</strong> de Reporting:</p>
+        <p>La solicitud <strong>${req.id}</strong> ha sido atendida y completada exitosamente por la analista <strong>${escapeHtml(req.analyst)}</strong> de Reporting:</p>
         <div class="email-ticket-highlight">
             <span style="font-size:0.75rem; color:#64748B;">Número de Ticket Generado</span>
             <div class="ticket-code-big">${escapeHtml(req.ticketNumber)}</div>
@@ -497,29 +936,24 @@ function sendResolutionTicketEmail(req) {
         </div>
     `;
 
-    openEmailPreviewModal(toEmail, subject, htmlBody);
+    openEmailPreviewModal(recipientsStr, subject, htmlBody);
 
     if (typeof emailjs !== 'undefined') {
-        const templateParams = {
-            to_email: toEmail,
-            subject: subject,
-            message: htmlBody,
-            name: 'Reporting Dichter & Neira'
-        };
-
-        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-            .then(function(response) {
-                console.log('EMAILJS SUCCESS!', response.status, response.text);
-                showToast(`📧 ¡Correo REAL con Ticket enviado a: ${toEmail}!`, 'success');
-            }, function(error) {
-                console.error('EMAILJS FAILED...', error);
-                showToast(`📧 Ticket guardado (Vista previa de correo mostrada)`, 'info');
-            });
+        allRecipients.forEach(email => {
+            const templateParams = {
+                to_email: email,
+                subject: subject,
+                message: htmlBody,
+                name: 'Reporting Dichter & Neira'
+            };
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+        });
+        showToast(`📧 ¡Correo con Ticket enviado a ${userEmail} y al equipo de Reporting!`, 'success');
     }
 }
 
 // ==========================================================================
-// 7. RENDERIZADO DE TABLAS E HISTORIALES
+// 9. RENDERIZADO DE TABLAS E HISTORIALES CON LINKS DE DESCARGA
 // ==========================================================================
 function renderMiniDashboard() {
     const containerTotal = document.getElementById('dash-total-count');
@@ -576,6 +1010,8 @@ function renderFieldHistory() {
 
     container.innerHTML = encoladas.map(req => {
         const isResolved = req.status === 'RESOLVED';
+        const isInProgress = req.status === 'IN_PROGRESS';
+
         let pdvsRender = '';
         if (req.isGeneralReview) {
             pdvsRender = `<span class="general-review-tag"><i data-lucide="search" style="width:12px"></i> Revisión General de Estudio</span>`;
@@ -585,17 +1021,26 @@ function renderFieldHistory() {
             pdvsRender = `<span class="tag-code">${escapeHtml(req.pdvCode || 'PDV')}</span>`;
         }
 
+        let statusText = 'En Espera';
+        let statusClass = 'pending';
+        if (isResolved) {
+            statusText = 'Ticket Asignado';
+            statusClass = 'resolved';
+        } else if (isInProgress) {
+            statusText = `🔵 En Proceso (Entrega: ${req.deliveryDate || 'Por acordar'})`;
+            statusClass = 'in_progress';
+        }
+
         return `
             <div class="item-card">
                 <div class="item-top">
                     <div>${pdvsRender}</div>
-                    <span class="chip-status ${isResolved ? 'resolved' : 'pending'}">
-                        ${isResolved ? 'Ticket Asignado' : 'En Espera (Máx. 2 días hábiles)'}
-                    </span>
+                    <span class="chip-status ${statusClass}">${statusText}</span>
                 </div>
                 <div style="font-size:0.83rem; color:var(--text-muted); margin-bottom:4px;">
                     Estudio: <strong>${escapeHtml(req.estudio)}</strong> | País: <strong>${escapeHtml(req.pais)}</strong> | Ola: <strong>${escapeHtml(req.ola)}</strong>
                 </div>
+                ${req.fileName ? `<div style="margin-bottom:4px;">${renderFileChip(req)}</div>` : ''}
                 ${req.analyst ? `<div style="margin-bottom:4px;"><span class="analyst-chip"><i data-lucide="user-check" style="width:11px"></i> Analista: ${escapeHtml(req.analyst)}</span></div>` : ''}
                 ${isResolved ? `
                     <div style="margin-top:8px; padding:8px; background:rgba(20,168,59,0.1); border-radius:6px; display:flex; justify-between; align-items:center;">
@@ -623,14 +1068,24 @@ function renderReportingHistory() {
 
     container.innerHTML = reportingReqs.map(req => {
         const isResolved = req.status === 'RESOLVED';
+        const isInProgress = req.status === 'IN_PROGRESS';
         const isNew = req.category === 'BI_NEW';
+
+        let statusText = 'En Evaluación';
+        let statusClass = 'pending';
+        if (isResolved) {
+            statusText = 'Completado';
+            statusClass = 'resolved';
+        } else if (isInProgress) {
+            statusText = `🔵 En Proceso (Entrega: ${req.deliveryDate || 'Acordada'})`;
+            statusClass = 'in_progress';
+        }
+
         return `
             <div class="item-card">
                 <div class="item-top">
                     <span class="tag-category">${isNew ? 'Power BI Nuevo' : 'Edición BI Existente'}</span>
-                    <span class="chip-status ${isResolved ? 'resolved' : 'pending'}">
-                        ${isResolved ? 'Completado' : 'En Evaluación (Máx. 3 días hábiles)'}
-                    </span>
+                    <span class="chip-status ${statusClass}">${statusText}</span>
                 </div>
                 <div style="font-size:0.85rem; font-weight:600; margin-bottom:4px;">
                     ${isNew ? `Área: ${escapeHtml(req.area)} (Frecuencia: ${escapeHtml(req.frecuencia)})` : `BI: ${escapeHtml(req.biNameToEdit)}`}
@@ -638,10 +1093,13 @@ function renderReportingHistory() {
                 <div style="font-size:0.8rem; color:var(--text-muted);">
                     Estudio: ${escapeHtml(req.estudio)} | País: ${escapeHtml(req.pais)}
                 </div>
+                ${req.fileName ? `<div style="margin-top:4px;">${renderFileChip(req)}</div>` : ''}
                 ${req.analyst ? `<div style="margin-top:4px;"><span class="analyst-chip">Analista: ${escapeHtml(req.analyst)}</span></div>` : ''}
             </div>
         `;
     }).join('');
+
+    lucide.createIcons();
 }
 
 function renderAdminTable() {
@@ -680,6 +1138,7 @@ function renderAdminTable() {
 
     tbody.innerHTML = filtered.map(req => {
         const isResolved = req.status === 'RESOLVED';
+        const isInProgress = req.status === 'IN_PROGRESS';
         const dateStr = new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
         let categoryLabel = 'Encolada PDV';
@@ -694,11 +1153,28 @@ function renderAdminTable() {
             detailText = `Área: ${req.area}`;
         }
 
+        let statusText = 'Pendiente';
+        let statusClass = 'pending';
+        let ticketOrDateInfo = '<span style="color:var(--text-subtle);">-- Sin Asignar --</span>';
+
+        if (isResolved) {
+            statusText = 'Resuelto';
+            statusClass = 'resolved';
+            ticketOrDateInfo = `<span style="font-family:var(--font-mono); color:var(--dn-green); font-weight:700;">${escapeHtml(req.ticketNumber)}</span>`;
+        } else if (isInProgress) {
+            statusText = 'En Proceso';
+            statusClass = 'in_progress';
+            ticketOrDateInfo = `<span style="font-size:0.78rem; color:var(--dn-blue-primary); font-weight:700;">📅 ${req.deliveryDate || 'Por acordar'}</span>`;
+        }
+
         return `
             <tr>
                 <td style="font-size:0.78rem; color:var(--text-muted);">${dateStr}</td>
                 <td><span class="tag-category">${categoryLabel}</span></td>
-                <td><strong>${escapeHtml(detailText)}</strong></td>
+                <td>
+                    <strong>${escapeHtml(detailText)}</strong>
+                    ${req.fileName ? `<br style="margin-bottom:2px;">${renderFileChip(req)}` : ''}
+                </td>
                 <td>${escapeHtml(req.estudio)}</td>
                 <td>${escapeHtml(req.pais)}</td>
                 <td><span style="font-size:0.81rem; color:var(--dn-blue-primary);">${escapeHtml(req.email || req.solicitante || 'N/A')}</span></td>
@@ -707,12 +1183,12 @@ function renderAdminTable() {
                         ? `<span class="analyst-chip">${escapeHtml(req.analyst)}</span>`
                         : `<span style="font-size:0.75rem; color:var(--dn-orange); font-style:italic;">-- Sin Asignar --</span>`}
                 </td>
-                <td><span class="chip-status ${isResolved ? 'resolved' : 'pending'}">${isResolved ? 'Resuelto' : 'Pendiente'}</span></td>
-                <td>${isResolved ? `<span style="font-family:var(--font-mono); color:var(--dn-green); font-weight:700;">${escapeHtml(req.ticketNumber)}</span>` : '<span style="color:var(--text-subtle);">-- Sin Ticket --</span>'}</td>
+                <td><span class="chip-status ${statusClass}">${statusText}</span></td>
+                <td>${ticketOrDateInfo}</td>
                 <td>
                     <div class="action-buttons-cell">
-                        <button class="btn-secondary btn-sm" onclick="openModal('${req.id}')" title="Gestionar / Asignar ticket">
-                            <i data-lucide="${isResolved ? 'edit-2' : 'check-square'}"></i> ${isResolved ? 'Editar' : 'Gestionar'}
+                        <button class="btn-secondary btn-sm" onclick="openModal('${req.id}')" title="Gestionar estado">
+                            <i data-lucide="edit-2"></i> Gestionar
                         </button>
                         <button class="btn-danger btn-sm" onclick="deleteRequest('${req.id}')" title="Eliminar solicitud">
                             <i data-lucide="trash-2"></i>
@@ -753,7 +1229,7 @@ function renderAll() {
 }
 
 // ==========================================================================
-// 8. TIEMPO PROMEDIO Y ANALYTICS
+// 10. TIEMPO PROMEDIO Y ANALYTICS
 // ==========================================================================
 function calcAvgResponseTimeForAnalyst(analystName) {
     const resolvedReqs = state.requests.filter(r => r.analyst === analystName && r.status === 'RESOLVED' && r.createdAt && r.resolvedAt);
@@ -906,7 +1382,7 @@ function renderAnalyticsCharts() {
 }
 
 // ==========================================================================
-// 9. MODAL DE GESTIÓN Y ASIGNACIÓN DE TICKET
+// 11. MODAL DE GESTIÓN (CAMBIO DE ESTADO, ACUERDO EN PROCESO Y TICKET)
 // ==========================================================================
 function openModal(id) {
     const req = state.requests.find(r => r.id === id);
@@ -920,14 +1396,40 @@ function openModal(id) {
         <div><strong>Solicitante Correo:</strong> <span class="highlight-email">${escapeHtml(req.email || 'No registrado')}</span></div>
         <div><strong>Estudio:</strong> ${escapeHtml(req.estudio)} | <strong>País:</strong> ${escapeHtml(req.pais)}</div>
         <div><strong>Modalidad / PDVs:</strong> ${escapeHtml(req.pdvCode || 'Encolada')}</div>
+        ${req.fileName ? `<div style="margin-top:4px;"><strong>Archivo Adjunto:</strong> ${renderFileChip(req)}</div>` : ''}
         <div><strong>Detalle:</strong> "${escapeHtml(req.detalle)}"</div>
     `;
 
     document.getElementById('modalAnalyst').value = req.analyst || '';
+    
+    // Configurar campos según estado actual
+    const currentStatus = req.status || 'PENDING';
+    document.getElementById('modalStatus').value = currentStatus;
+    toggleModalStatusFields(currentStatus);
+
+    document.getElementById('modalDeliveryDate').value = req.deliveryDate || '';
+    document.getElementById('modalInProgressNote').value = req.inProgressNote || '';
     document.getElementById('modalTicket').value = req.ticketNumber || '';
     document.getElementById('modalNote').value = req.resolutionNote || '';
 
     document.getElementById('response-modal').classList.add('active');
+    lucide.createIcons();
+}
+
+function toggleModalStatusFields(status) {
+    const inProgressBlock = document.getElementById('modal-in-progress-fields');
+    const resolvedBlock = document.getElementById('modal-resolved-fields');
+
+    if (status === 'IN_PROGRESS') {
+        inProgressBlock.classList.remove('hidden');
+        resolvedBlock.classList.add('hidden');
+    } else if (status === 'RESOLVED') {
+        inProgressBlock.classList.add('hidden');
+        resolvedBlock.classList.remove('hidden');
+    } else {
+        inProgressBlock.classList.add('hidden');
+        resolvedBlock.classList.add('hidden');
+    }
 }
 
 function closeModal() {
@@ -942,37 +1444,62 @@ function autoGenerateTicket() {
 
 function saveModalResponse() {
     const analystVal = document.getElementById('modalAnalyst').value;
-    const ticketVal = document.getElementById('modalTicket').value.trim();
-    const noteVal = document.getElementById('modalNote').value.trim();
+    const statusVal = document.getElementById('modalStatus').value;
 
     if (!analystVal) {
         showToast('Debes seleccionar la analista asignada (Mayumi Sanchez o Juliana Chimbi)', 'warning');
         return;
     }
 
-    if (!ticketVal) {
-        showToast('Debes ingresar un número de ticket', 'warning');
-        return;
-    }
-
     const req = state.requests.find(r => r.id === state.activeModalId);
-    if (req) {
-        req.analyst = analystVal;
+    if (!req) return;
+
+    req.analyst = analystVal;
+    req.status = statusVal;
+
+    if (statusVal === 'IN_PROGRESS') {
+        const deliveryDate = document.getElementById('modalDeliveryDate').value;
+        const noteVal = document.getElementById('modalInProgressNote').value.trim();
+
+        if (!deliveryDate) {
+            showToast('Debes ingresar la fecha acordada de entrega', 'warning');
+            return;
+        }
+
+        req.deliveryDate = deliveryDate;
+        req.inProgressNote = noteVal;
+        
+        saveToStorage();
+        renderAll();
+        closeModal();
+        sendInProgressEmail(req);
+    } else if (statusVal === 'RESOLVED') {
+        const ticketVal = document.getElementById('modalTicket').value.trim();
+        const noteVal = document.getElementById('modalNote').value.trim();
+
+        if (!ticketVal) {
+            showToast('Debes ingresar un número de ticket', 'warning');
+            return;
+        }
+
         req.ticketNumber = ticketVal;
         req.resolutionNote = noteVal;
-        req.status = 'RESOLVED';
         req.resolvedAt = req.resolvedAt || new Date().toISOString();
 
         saveToStorage();
         renderAll();
         closeModal();
-
         sendResolutionTicketEmail(req);
+    } else {
+        saveToStorage();
+        renderAll();
+        closeModal();
+        showToast('Estado de la solicitud actualizado', 'info');
     }
 }
 
 // ==========================================================================
-// 10. VISTA PREVIA CORREOS
+// 12. VISTA PREVIA CORREOS
 // ==========================================================================
 function openEmailPreviewModal(toEmail, subject, htmlBody) {
     document.getElementById('email-preview-to').textContent = toEmail;
@@ -987,7 +1514,7 @@ function closeEmailPreviewModal() {
 }
 
 // ==========================================================================
-// 11. UTILS
+// 13. UTILS
 // ==========================================================================
 function exportToCSV() {
     if (state.requests.length === 0) {

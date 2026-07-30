@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - PALETA DE COLORES OFICIALES Y TEMA BLANCO (LIGHT)
+   PORTAL DICHTER & NEIRA - DESCARGA DIRECTA VIA BLOB (STYLES.CSS)
    ========================================================================== */
 
 :root {
@@ -57,6 +57,109 @@ body.dn-light-theme {
     -webkit-font-smoothing: antialiased;
 }
 
+/* ARCHIVOS ADJUNTOS BOTÓN DE DESCARGA DIRECTA */
+.file-attached-info {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--dn-blue-primary);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.file-attached-chip {
+    background: rgba(13, 92, 171, 0.08);
+    border: 1px solid rgba(13, 92, 171, 0.25);
+    color: var(--dn-blue-primary);
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    background-color: transparent;
+    transition: var(--transition);
+}
+
+.file-attached-chip.clickable:hover {
+    background: var(--dn-blue-primary);
+    color: #ffffff;
+    border-color: var(--dn-blue-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(13, 92, 171, 0.25);
+}
+
+.file-attached-chip.clickable:hover i {
+    color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   BANNER DE NOVEDAD DE HOY (AL ENTRAR A LA PÁGINA)
+   -------------------------------------------------------------------------- */
+.today-alert-banner {
+    background: linear-gradient(135deg, var(--dn-navy-secondary), var(--dn-blue-primary));
+    color: #ffffff;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 8px 24px rgba(13, 92, 171, 0.2);
+    border-left: 6px solid var(--dn-yellow);
+    animation: slideDown 0.35s ease forwards;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.today-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.today-banner-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 216, 11, 0.2);
+    color: var(--dn-yellow);
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.today-banner-content h4 {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.today-banner-content p {
+    font-size: 0.86rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.today-banner-close {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 1.6rem;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: var(--transition);
+}
+
+.today-banner-close:hover { opacity: 1; }
+
 /* Alert Box para Revisión General de Estudio */
 .info-alert-box {
     background: rgba(51, 189, 238, 0.12);
@@ -109,7 +212,151 @@ body.dn-light-theme {
 }
 
 /* --------------------------------------------------------------------------
-   HEADER & TOPBAR (TEMA CLARO CORPORATIVO)
+   NOVEDADES Y COLOMBIA INFO CARD
+   -------------------------------------------------------------------------- */
+.colombia-info-card {
+    border-left: 5px solid var(--dn-yellow);
+    background: linear-gradient(135deg, #FFFFFF, rgba(255, 216, 11, 0.06));
+}
+
+.colombia-info-header {
+    margin-bottom: 12px;
+}
+
+.colombia-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(13, 92, 171, 0.1);
+    color: var(--dn-blue-primary);
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    border: 1px solid rgba(13, 92, 171, 0.2);
+}
+
+.flag-icon { font-size: 1.1rem; }
+
+.colombia-info-card h2 {
+    font-size: 1.15rem;
+    color: var(--dn-navy-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.colombia-info-text {
+    font-size: 0.9rem;
+    color: var(--text-dark);
+    line-height: 1.6;
+}
+
+/* Feed Estado de Analistas */
+.analyst-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.analyst-status-card {
+    background: var(--dn-bg-light);
+    border: 1px solid var(--dn-border-light);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    transition: var(--transition);
+}
+
+.analyst-status-card.on-leave {
+    border-left: 4px solid var(--dn-pink);
+    background: rgba(248, 56, 117, 0.04);
+}
+
+.analyst-status-card.available {
+    border-left: 4px solid var(--dn-green);
+    background: rgba(20, 168, 59, 0.04);
+}
+
+.analyst-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.analyst-name-bold {
+    font-weight: 800;
+    font-size: 0.98rem;
+    color: var(--dn-navy-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-badge {
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.status-badge.available { background: rgba(20, 168, 59, 0.15); color: var(--dn-green); }
+.status-badge.vacaciones { background: rgba(248, 56, 117, 0.15); color: var(--dn-pink); }
+.status-badge.dia_libre { background: rgba(255, 149, 50, 0.15); color: var(--dn-orange); }
+.status-badge.capacitacion { background: rgba(109, 55, 169, 0.15); color: var(--dn-purple); }
+
+.analyst-note-text {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.analyst-dates-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* Grid de Festivos */
+.holidays-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+    .holidays-grid { grid-template-columns: 1fr; }
+}
+
+.holiday-item {
+    background: var(--dn-bg-light);
+    border: 1px solid var(--dn-border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.holiday-date-box {
+    background: var(--dn-blue-primary);
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    text-align: center;
+    min-width: 75px;
+}
+
+.holiday-day { font-size: 0.85rem; font-weight: 800; font-family: var(--font-mono); }
+.holiday-month { font-size: 0.68rem; text-transform: uppercase; font-weight: 700; }
+
+.holiday-name { font-size: 0.82rem; font-weight: 600; color: var(--dn-navy-secondary); }
+
+/* --------------------------------------------------------------------------
+   HEADER & TOPBAR
    -------------------------------------------------------------------------- */
 .app-header {
     display: flex;
@@ -363,7 +610,7 @@ body.dn-light-theme {
 .card-header p { font-size: 0.83rem; color: var(--text-muted); }
 
 /* --------------------------------------------------------------------------
-   MINI DASHBOARD ENCOLADAS (TEMA CLARO)
+   MINI DASHBOARD ENCOLADAS
    -------------------------------------------------------------------------- */
 .mini-dashboard-container {
     margin-bottom: 24px;
@@ -500,7 +747,7 @@ label {
     pointer-events: none;
 }
 
-input[type="text"], input[type="password"], input[type="email"], select, textarea {
+input[type="text"], input[type="password"], input[type="email"], input[type="date"], input[type="file"], select, textarea {
     width: 100%;
     padding: 11px 14px 11px 40px;
     background: #FFFFFF;
@@ -511,6 +758,11 @@ input[type="text"], input[type="password"], input[type="email"], select, textare
     font-size: 0.88rem;
     outline: none;
     transition: var(--transition);
+}
+
+input[type="file"] {
+    padding-top: 8px;
+    cursor: pointer;
 }
 
 select {
@@ -716,10 +968,11 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
 }
 .chip-status.pending { background: rgba(255, 149, 50, 0.15); color: var(--dn-orange); }
+.chip-status.in_progress { background: rgba(51, 189, 238, 0.2); color: var(--dn-blue-primary); border: 1px solid rgba(13, 92, 171, 0.3); }
 .chip-status.resolved { background: rgba(20, 168, 59, 0.15); color: var(--dn-green); }
 
 /* --------------------------------------------------------------------------
-   TABLA GENERAL ADMIN (BANDEJA CENTRAL)
+   TABLA GENERAL ADMIN
    -------------------------------------------------------------------------- */
 .metrics-row {
     display: grid;
