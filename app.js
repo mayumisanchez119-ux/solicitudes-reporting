@@ -1,17 +1,20 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - BANNER SOLO SI HOY ES FESTIVO O VACACIONES (APP.JS)
+   PORTAL DICHTER & NEIRA - NUBE Y SINCRONIZACIÓN EN TIEMPO REAL (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v18';
-const NOVEDADES_KEY = 'dn_portal_novedades_v2';
+const STORAGE_KEY = 'dn_portal_requests_v19';
+const NOVEDADES_KEY = 'dn_portal_novedades_v3';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
+
+// BASE DE DATOS EN LA NUBE PARA SINCRONIZACIÓN MULTI-DISPOSITIVO (COMPARTIDA GLOBALMENTE)
+const SYNC_API_URL = 'https://jsonblob.com/api/jsonBlob/019fb398-a51c-79af-a1fd-c0095e6459fe';
 
 // CREDENCIALES EMAILJS
 const EMAILJS_SERVICE_ID = 'service_b1jhrai';
 const EMAILJS_TEMPLATE_ID = 'template_cpy03f3';
 const EMAILJS_PUBLIC_KEY = 'OfXawgXmm_YWqDj4B';
 
-// CORREOS DEL EQUIPO DE REPORTING (RECIBEN COPIA DE TODAS LAS SOLICITUDES)
+// CORREOS DEL EQUIPO DE REPORTING
 const REPORTING_TEAM_EMAILS = [
     'masanchez@dichter-neira.com',
     'jchimbi@dichter-neira.com'
@@ -67,16 +70,15 @@ const colombianHolidays2026 = [
 ];
 
 // ==========================================================================
-// 1. INICIALIZACIÓN
+// 1. INICIALIZACIÓN CON SINCRONIZACIÓN NUBE
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     try {
         if (typeof emailjs !== 'undefined') {
             emailjs.init(EMAILJS_PUBLIC_KEY);
-            console.log("EmailJS inicializado.");
         }
     } catch (e) {
-        console.error("Error al inicializar EmailJS:", e);
+        console.error("Error EmailJS:", e);
     }
 
     loadFromStorage();
@@ -97,11 +99,74 @@ document.addEventListener('DOMContentLoaded', () => {
     renderVacacionesAdminTable();
     checkTodayNovelty();
 
+    // Sincronización en vivo inicial desde la nube
+    fetchCloudData();
+
+    // Auto-actualización periódica en vivo cada 5 segundos
+    setInterval(fetchCloudData, 5000);
+
     lucide.createIcons();
 });
 
 // ==========================================================================
-// 2. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS
+// 2. SINCRONIZACIÓN BASE DE DATOS GLOBAL EN LA NUBE (TIEMPO REAL)
+// ==========================================================================
+async function fetchCloudData() {
+    try {
+        const resp = await fetch(SYNC_API_URL, { cache: 'no-store' });
+        if (resp.ok) {
+            const data = await resp.json();
+            
+            let updated = false;
+
+            if (data && Array.isArray(data.requests)) {
+                state.requests = data.requests;
+                saveToStorage();
+                updated = true;
+            }
+
+            if (data && Array.isArray(data.analystStatus)) {
+                state.analystStatus = data.analystStatus;
+                saveNovedadesToStorage();
+                updated = true;
+            }
+
+            if (updated) {
+                renderAll();
+                renderNovedades();
+                renderVacacionesAdminTable();
+                checkTodayNovelty();
+            }
+        }
+    } catch (e) {
+        console.warn("Modo fuera de línea / Nube no respondió:", e);
+    }
+}
+
+async function syncCloudData() {
+    saveToStorage();
+    saveNovedadesToStorage();
+
+    const payload = {
+        requests: state.requests,
+        analystStatus: state.analystStatus,
+        lastUpdated: new Date().toISOString()
+    };
+
+    try {
+        await fetch(SYNC_API_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        console.log("✅ Datos sincronizados globalmente en la nube.");
+    } catch (e) {
+        console.error("Error al publicar en la nube:", e);
+    }
+}
+
+// ==========================================================================
+// 3. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS
 // ==========================================================================
 function handleFileSelect(inputElem, targetInfoId) {
     const target = document.getElementById(targetInfoId);
@@ -179,7 +244,7 @@ function renderFileChip(req) {
 }
 
 // ==========================================================================
-// 3. VERIFICACIÓN Y ALERTA AUTOMÁTICA DE NOVEDADES DEL DÍA (EVALÚA FECHA ACTUAL)
+// 4. ALERTA DE NOVEDADES DEL DÍA (EVALÚA FECHA ACTUAL)
 // ==========================================================================
 function checkTodayNovelty() {
     const banner = document.getElementById('today-alert-banner');
@@ -192,7 +257,6 @@ function checkTodayNovelty() {
     const todayStr = new Date().toISOString().slice(0, 10);
     const todayHoliday = colombianHolidays2026.find(h => h.iso === todayStr);
 
-    // Evalúa si HOY cae dentro del rango de vacaciones o día libre de alguna analista
     const absentAnalyst = state.analystStatus.find(a => {
         if (a.status !== 'VACACIONES' && a.status !== 'DIA_LIBRE') return false;
         if (a.dateStart && a.dateEnd) {
@@ -224,7 +288,7 @@ function closeTodayBanner() {
 }
 
 // ==========================================================================
-// 4. NAVEGACIÓN Y SESIÓN (INCLUYE PESTAÑA DEDICADA DE VACACIONES)
+// 5. NAVEGACIÓN Y SESIÓN DE REPORTING
 // ==========================================================================
 function updateHeaderSessionUI() {
     const badgeLabel = document.getElementById('session-label');
@@ -314,6 +378,7 @@ function switchTab(tabId) {
         setTimeout(renderAnalyticsCharts, 100);
     }
 
+    fetchCloudData();
     lucide.createIcons();
 }
 
@@ -353,14 +418,14 @@ function toggleBiFields(type) {
 }
 
 // ==========================================================================
-// 5. PERSISTENCIA DE DATOS
+// 6. PERSISTENCIA DE DATOS
 // ==========================================================================
 function loadFromStorage() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) state.requests = JSON.parse(raw);
     } catch (e) {
-        console.error("Error al cargar localStorage", e);
+        console.error("Error localStorage", e);
         state.requests = [];
     }
 }
@@ -376,9 +441,7 @@ function saveToStorage() {
 function loadNovedadesFromStorage() {
     try {
         const raw = localStorage.getItem(NOVEDADES_KEY);
-        if (raw) {
-            state.analystStatus = JSON.parse(raw);
-        }
+        if (raw) state.analystStatus = JSON.parse(raw);
     } catch (e) {
         console.error("Error al cargar novedades de localStorage", e);
     }
@@ -513,15 +576,15 @@ function addMockData() {
     }
 
     state.requests.unshift(newReq);
-    saveToStorage();
+    syncCloudData();
     renderAll();
-    showToast('Solicitud simulada agregada', 'success');
+    showToast('Solicitud simulada agregada y sincronizada', 'success');
 }
 
 function deleteRequest(id) {
     if (confirm(`¿Estás seguro de eliminar la solicitud ${id}? Esta acción no se puede deshacer.`)) {
         state.requests = state.requests.filter(r => r.id !== id);
-        saveToStorage();
+        syncCloudData();
         renderAll();
         if (state.activeTab === 'analytics') {
             renderAnalyticsCharts();
@@ -531,7 +594,7 @@ function deleteRequest(id) {
 }
 
 // ==========================================================================
-// 6. GESTIÓN PÁGINA INDEPENDIENTE DE VACACIONES & NOVEDADES
+// 7. GESTIÓN PÁGINA INDEPENDIENTE DE VACACIONES & NOVEDADES
 // ==========================================================================
 function handleNovedadSubmit(e) {
     e.preventDefault();
@@ -565,12 +628,12 @@ function handleNovedadSubmit(e) {
         state.analystStatus.push(updatedStatus);
     }
 
-    saveNovedadesToStorage();
+    syncCloudData();
     document.getElementById('form-analyst-novedad').reset();
     renderNovedades();
     renderVacacionesAdminTable();
     checkTodayNovelty();
-    showToast(`Novedad publicada con éxito para ${analystName}`, 'success');
+    showToast(`Novedad publicada y sincronizada con éxito para ${analystName}`, 'success');
 }
 
 function deleteNovedad(index) {
@@ -579,7 +642,7 @@ function deleteNovedad(index) {
 
     if (confirm(`¿Estás seguro de eliminar el registro de vacaciones/novedad de ${item.analyst}?`)) {
         state.analystStatus.splice(index, 1);
-        saveNovedadesToStorage();
+        syncCloudData();
         renderNovedades();
         renderVacacionesAdminTable();
         checkTodayNovelty();
@@ -697,7 +760,7 @@ function renderNovedades() {
 }
 
 // ==========================================================================
-// 7. ENVÍO DE FORMULARIOS CON ARCHIVOS ADJUNTOS
+// 8. ENVÍO DE FORMULARIOS CON SINCRONIZACIÓN NUBE INSTANTÁNEA
 // ==========================================================================
 function handleEncoladaSubmit(e) {
     e.preventDefault();
@@ -751,7 +814,7 @@ function handleEncoladaSubmit(e) {
     };
 
     state.requests.unshift(newReq);
-    saveToStorage();
+    syncCloudData();
 
     document.getElementById('form-encoladas').reset();
     document.getElementById('enc-file-info').innerHTML = '';
@@ -801,7 +864,7 @@ function handleReportingSubmit(e) {
     }
 
     state.requests.unshift(newReq);
-    saveToStorage();
+    syncCloudData();
 
     document.getElementById('form-reporting').reset();
     document.getElementById('rep-file-info').innerHTML = '';
@@ -811,7 +874,7 @@ function handleReportingSubmit(e) {
 }
 
 // ==========================================================================
-// 8. ENVÍO REAL DE CORREOS Y NOTIFICACIONES A USUARIO Y EQUIPO DE REPORTING
+// 9. ENVÍO REAL DE CORREOS Y NOTIFICACIONES
 // ==========================================================================
 function sendSubmissionConfirmationEmail(req) {
     const userEmail = req.email || 'usuario@dichter-neira.com';
@@ -862,7 +925,7 @@ function sendSubmissionConfirmationEmail(req) {
 
             emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
                 .then(function() {
-                    console.log(`EmailJS enviado exitosamente a: ${email}`);
+                    console.log(`EmailJS enviado a: ${email}`);
                 }, function(error) {
                     console.error(`Error enviando EmailJS a ${email}:`, error);
                 });
@@ -953,7 +1016,7 @@ function sendResolutionTicketEmail(req) {
 }
 
 // ==========================================================================
-// 9. RENDERIZADO DE TABLAS E HISTORIALES CON LINKS DE DESCARGA
+// 10. RENDERIZADO DE TABLAS E HISTORIALES CON LINKS DE DESCARGA
 // ==========================================================================
 function renderMiniDashboard() {
     const containerTotal = document.getElementById('dash-total-count');
@@ -1229,7 +1292,7 @@ function renderAll() {
 }
 
 // ==========================================================================
-// 10. TIEMPO PROMEDIO Y ANALYTICS
+// 11. TIEMPO PROMEDIO Y ANALYTICS
 // ==========================================================================
 function calcAvgResponseTimeForAnalyst(analystName) {
     const resolvedReqs = state.requests.filter(r => r.analyst === analystName && r.status === 'RESOLVED' && r.createdAt && r.resolvedAt);
@@ -1382,7 +1445,7 @@ function renderAnalyticsCharts() {
 }
 
 // ==========================================================================
-// 11. MODAL DE GESTIÓN (CAMBIO DE ESTADO, ACUERDO EN PROCESO Y TICKET)
+// 12. MODAL DE GESTIÓN (CAMBIO DE ESTADO, ACUERDO EN PROCESO Y TICKET)
 // ==========================================================================
 function openModal(id) {
     const req = state.requests.find(r => r.id === id);
@@ -1469,7 +1532,7 @@ function saveModalResponse() {
         req.deliveryDate = deliveryDate;
         req.inProgressNote = noteVal;
         
-        saveToStorage();
+        syncCloudData();
         renderAll();
         closeModal();
         sendInProgressEmail(req);
@@ -1486,12 +1549,12 @@ function saveModalResponse() {
         req.resolutionNote = noteVal;
         req.resolvedAt = req.resolvedAt || new Date().toISOString();
 
-        saveToStorage();
+        syncCloudData();
         renderAll();
         closeModal();
         sendResolutionTicketEmail(req);
     } else {
-        saveToStorage();
+        syncCloudData();
         renderAll();
         closeModal();
         showToast('Estado de la solicitud actualizado', 'info');
@@ -1499,7 +1562,7 @@ function saveModalResponse() {
 }
 
 // ==========================================================================
-// 12. VISTA PREVIA CORREOS
+// 13. VISTA PREVIA CORREOS
 // ==========================================================================
 function openEmailPreviewModal(toEmail, subject, htmlBody) {
     document.getElementById('email-preview-to').textContent = toEmail;
@@ -1514,7 +1577,7 @@ function closeEmailPreviewModal() {
 }
 
 // ==========================================================================
-// 13. UTILS
+// 14. UTILS
 // ==========================================================================
 function exportToCSV() {
     if (state.requests.length === 0) {
