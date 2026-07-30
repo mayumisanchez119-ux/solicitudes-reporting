@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- EmailJS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=3.0">
+    <link rel="stylesheet" href="styles.css?v=4.0">
 </head>
 <body class="dn-light-theme">
     <!-- Header Principal Dichter & Neira -->
@@ -61,6 +61,7 @@
 
         <!-- User Session Bar -->
         <div class="user-session-bar" id="user-session-bar">
+            <span id="cloud-sync-status" class="sync-badge-status online"><span class="sync-dot-pulse"></span> Nube Conectada</span>
             <div class="user-badge-info" id="session-badge">
                 <i data-lucide="user"></i>
                 <span id="session-label">Modo Operaciones (Público)</span>
@@ -603,6 +604,9 @@
                             <option value="UNASSIGNED">Sin Asignar</option>
                         </select>
 
+                        <button class="btn-secondary" onclick="fetchCloudData(true)" title="Forzar sincronización desde la nube">
+                            <i data-lucide="refresh-cw"></i> Sincronizar Nube
+                        </button>
                         <button class="btn-secondary" onclick="exportToCSV()" title="Descargar reporte completo">
                             <i data-lucide="download"></i> CSV
                         </button>
@@ -978,6 +982,6 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-wrapper"></div>
 
-    <script src="app.js?v=3.0"></script>
+    <script src="app.js?v=4.0"></script>
 </body>
 </html>

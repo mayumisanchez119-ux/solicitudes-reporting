@@ -2,8 +2,8 @@
    PORTAL DICHTER & NEIRA - NUBE Y SINCRONIZACIÓN EN TIEMPO REAL (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v19';
-const NOVEDADES_KEY = 'dn_portal_novedades_v3';
+const STORAGE_KEY = 'dn_portal_requests_v20';
+const NOVEDADES_KEY = 'dn_portal_novedades_v4';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 
 // BASE DE DATOS EN LA NUBE PARA SINCRONIZACIÓN MULTI-DISPOSITIVO (COMPARTIDA GLOBALMENTE)
@@ -99,11 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
     renderVacacionesAdminTable();
     checkTodayNovelty();
 
-    // Sincronización en vivo inicial desde la nube
+    // Sincronización inicial desde la nube
     fetchCloudData();
 
-    // Auto-actualización periódica en vivo cada 5 segundos
-    setInterval(fetchCloudData, 5000);
+    // Auto-polling cada 4 segundos
+    setInterval(fetchCloudData, 4000);
 
     lucide.createIcons();
 });
@@ -111,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================================================
 // 2. SINCRONIZACIÓN BASE DE DATOS GLOBAL EN LA NUBE (TIEMPO REAL)
 // ==========================================================================
-async function fetchCloudData() {
+async function fetchCloudData(userTriggered = false) {
+    const syncBadge = document.getElementById('cloud-sync-status');
     try {
         const resp = await fetch(SYNC_API_URL, { cache: 'no-store' });
         if (resp.ok) {
@@ -120,7 +121,7 @@ async function fetchCloudData() {
             let updated = false;
 
             if (data && Array.isArray(data.requests)) {
-                state.requests = data.requests;
+                state.requests = mergeRequests(state.requests, data.requests);
                 saveToStorage();
                 updated = true;
             }
@@ -137,18 +138,62 @@ async function fetchCloudData() {
                 renderVacacionesAdminTable();
                 checkTodayNovelty();
             }
+
+            if (syncBadge) {
+                syncBadge.className = 'sync-badge-status online';
+                syncBadge.innerHTML = `<span class="sync-dot-pulse"></span> Nube Conectada`;
+            }
+
+            if (userTriggered) {
+                showToast(`🔄 Nube sincronizada (${state.requests.length} solicitudes en total)`, 'success');
+            }
         }
     } catch (e) {
-        console.warn("Modo fuera de línea / Nube no respondió:", e);
+        console.warn("Nube no disponible temporalmente:", e);
+        if (syncBadge) {
+            syncBadge.className = 'sync-badge-status offline';
+            syncBadge.innerHTML = `⚠️ Modo Local`;
+        }
     }
+}
+
+function mergeRequests(localArr, cloudArr) {
+    if (!Array.isArray(cloudArr)) return localArr;
+    const map = new Map();
+
+    // 1. Cargar lo local
+    localArr.forEach(r => map.set(r.id, r));
+
+    // 2. Combinar con lo que viene del cloud
+    cloudArr.forEach(cloudReq => {
+        if (!map.has(cloudReq.id)) {
+            map.set(cloudReq.id, cloudReq);
+        } else {
+            const localReq = map.get(cloudReq.id);
+            map.set(cloudReq.id, { ...localReq, ...cloudReq });
+        }
+    });
+
+    const merged = Array.from(map.values());
+    merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return merged;
 }
 
 async function syncCloudData() {
     saveToStorage();
     saveNovedadesToStorage();
 
+    // Truncar dataUrl masivo base64 para mantener ligera la API REST
+    const sanitizedRequests = state.requests.map(r => {
+        const copy = { ...r };
+        if (copy.fileDataUrl && copy.fileDataUrl.length > 150000) {
+            copy.fileDataUrl = null;
+        }
+        return copy;
+    });
+
     const payload = {
-        requests: state.requests,
+        requests: sanitizedRequests,
         analystStatus: state.analystStatus,
         lastUpdated: new Date().toISOString()
     };
@@ -159,7 +204,7 @@ async function syncCloudData() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log("✅ Datos sincronizados globalmente en la nube.");
+        console.log("✅ Datos sincronizados en la nube.");
     } catch (e) {
         console.error("Error al publicar en la nube:", e);
     }
@@ -418,7 +463,7 @@ function toggleBiFields(type) {
 }
 
 // ==========================================================================
-// 6. PERSISTENCIA DE DATOS
+// 6. PERSISTENCIA DE DATOS LOCAL
 // ==========================================================================
 function loadFromStorage() {
     try {
@@ -762,7 +807,7 @@ function renderNovedades() {
 // ==========================================================================
 // 8. ENVÍO DE FORMULARIOS CON SINCRONIZACIÓN NUBE INSTANTÁNEA
 // ==========================================================================
-function handleEncoladaSubmit(e) {
+async function handleEncoladaSubmit(e) {
     e.preventDefault();
 
     const encType = document.querySelector('input[name="encType"]:checked').value;
@@ -813,8 +858,14 @@ function handleEncoladaSubmit(e) {
         resolvedAt: null
     };
 
+    // 1. Traer primero el estado más reciente de la nube para evitar colisiones
+    await fetchCloudData();
+
+    // 2. Insertar la nueva solicitud
     state.requests.unshift(newReq);
-    syncCloudData();
+
+    // 3. Sincronizar inmediatamente a la nube
+    await syncCloudData();
 
     document.getElementById('form-encoladas').reset();
     document.getElementById('enc-file-info').innerHTML = '';
@@ -823,7 +874,7 @@ function handleEncoladaSubmit(e) {
     sendSubmissionConfirmationEmail(newReq);
 }
 
-function handleReportingSubmit(e) {
+async function handleReportingSubmit(e) {
     e.preventDefault();
 
     const biType = document.querySelector('input[name="biType"]:checked').value;
@@ -863,8 +914,14 @@ function handleReportingSubmit(e) {
         newReq.solicitante = `Área: ${newReq.area}`;
     }
 
+    // 1. Traer primero el estado más reciente de la nube
+    await fetchCloudData();
+
+    // 2. Insertar nueva solicitud
     state.requests.unshift(newReq);
-    syncCloudData();
+
+    // 3. Sincronizar inmediatamente a la nube
+    await syncCloudData();
 
     document.getElementById('form-reporting').reset();
     document.getElementById('rep-file-info').innerHTML = '';
