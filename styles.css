@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - INDICADOR DE SINCRONIZACIÓN EN VIVO (STYLES.CSS)
+   PORTAL DICHTER & NEIRA - STYLES CON ANIMACIONES DE BIENVENIDA Y TRANSICIONES (STYLES.CSS)
    ========================================================================== */
 
 :root {
@@ -55,6 +55,102 @@ body.dn-light-theme {
     padding-bottom: 50px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+/* ==========================================================================
+   0. SPLASH SCREEN ANIMACIÓN INICIAL DE BIENVENIDA (LOGO D&N REPORTING)
+   ========================================================================== */
+.splash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: linear-gradient(135deg, #1E293B 0%, #0D5CAB 50%, #24335F 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.splash-overlay.splash-fade-out {
+    opacity: 0;
+    transform: scale(1.04);
+    pointer-events: none;
+}
+
+.splash-content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: splashBounce 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes splashBounce {
+    0% { opacity: 0; transform: scale(0.85) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.splash-logo-badge {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--dn-cyan-accent), var(--dn-blue-primary));
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 36px rgba(51, 189, 238, 0.4);
+    margin-bottom: 20px;
+    animation: logoGlow 2s infinite ease-in-out;
+}
+
+@keyframes logoGlow {
+    0%, 100% { box-shadow: 0 12px 36px rgba(51, 189, 238, 0.4); transform: translateY(0); }
+    50% { box-shadow: 0 16px 48px rgba(51, 189, 238, 0.7); transform: translateY(-4px); }
+}
+
+.splash-dn-bold {
+    font-weight: 900;
+    font-size: 2.2rem;
+    color: #ffffff;
+    letter-spacing: -0.05em;
+}
+
+.splash-title {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #ffffff;
+    margin-bottom: 6px;
+}
+
+.splash-subtitle {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+    margin-bottom: 24px;
+}
+
+.splash-loader-bar {
+    width: 180px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+}
+
+.splash-loader-fill {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--dn-cyan-accent), var(--dn-yellow));
+    border-radius: var(--radius-pill);
+    animation: fillLoader 1.5s ease-in-out forwards;
+}
+
+@keyframes fillLoader {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(0); }
 }
 
 /* INDICADOR DE NUBE Y SINCRONIZACIÓN */
@@ -134,9 +230,7 @@ body.dn-light-theme {
     color: #ffffff;
 }
 
-/* --------------------------------------------------------------------------
-   BANNER DE NOVEDAD DE HOY (AL ENTRAR A LA PÁGINA)
-   -------------------------------------------------------------------------- */
+/* BANNER DE NOVEDAD DE HOY */
 .today-alert-banner {
     background: linear-gradient(135deg, var(--dn-navy-secondary), var(--dn-blue-primary));
     color: #ffffff;
@@ -198,7 +292,6 @@ body.dn-light-theme {
 
 .today-banner-close:hover { opacity: 1; }
 
-/* Alert Box para Revisión General de Estudio */
 .info-alert-box {
     background: rgba(51, 189, 238, 0.12);
     border: 1px solid rgba(13, 92, 171, 0.2);
@@ -218,7 +311,6 @@ body.dn-light-theme {
     flex-shrink: 0;
 }
 
-/* Pills para Múltiples PDVs */
 .pdv-pill-list {
     display: flex;
     flex-wrap: wrap;
@@ -249,9 +341,6 @@ body.dn-light-theme {
     gap: 4px;
 }
 
-/* --------------------------------------------------------------------------
-   NOVEDADES Y COLOMBIA INFO CARD
-   -------------------------------------------------------------------------- */
 .colombia-info-card {
     border-left: 5px solid var(--dn-yellow);
     background: linear-gradient(135deg, #FFFFFF, rgba(255, 216, 11, 0.06));
@@ -291,7 +380,6 @@ body.dn-light-theme {
     line-height: 1.6;
 }
 
-/* Feed Estado de Analistas */
 .analyst-status-list {
     display: flex;
     flex-direction: column;
@@ -356,7 +444,6 @@ body.dn-light-theme {
     margin-top: 4px;
 }
 
-/* Grid de Festivos */
 .holidays-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -458,7 +545,6 @@ body.dn-light-theme {
     color: var(--text-muted);
 }
 
-/* Pestañas de Navegación */
 .main-nav {
     display: flex;
     background: var(--dn-bg-light);
@@ -512,7 +598,6 @@ body.dn-light-theme {
     border-radius: var(--radius-pill);
 }
 
-/* User Session Bar */
 .user-session-bar {
     display: flex;
     align-items: center;
@@ -576,9 +661,9 @@ body.dn-light-theme {
 
 .hidden { display: none !important; }
 
-/* --------------------------------------------------------------------------
-   ESTRUCTURA DE VISTAS Y CARDS BLANCAS
-   -------------------------------------------------------------------------- */
+/* ==========================================================================
+   ESTRUCTURA DE VISTAS Y ANIMACIÓN DE TRANSICIÓN DE PESTAÑAS
+   ========================================================================== */
 .main-container {
     max-width: 1380px;
     margin: 28px auto 0 auto;
@@ -587,16 +672,21 @@ body.dn-light-theme {
 
 .tab-content {
     display: none;
-    animation: fadeIn 0.25s ease forwards;
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tab-content.active {
     display: block;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    animation: tabSlideUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes tabSlideUp {
+    0% { opacity: 0; transform: translateY(18px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .grid-two-columns {
@@ -647,9 +737,7 @@ body.dn-light-theme {
 .card-header h2 { font-size: 1.15rem; font-weight: 700; color: var(--dn-navy-secondary); }
 .card-header p { font-size: 0.83rem; color: var(--text-muted); }
 
-/* --------------------------------------------------------------------------
-   MINI DASHBOARD ENCOLADAS
-   -------------------------------------------------------------------------- */
+/* MINI DASHBOARD */
 .mini-dashboard-container {
     margin-bottom: 24px;
     border-top: 4px solid var(--dn-cyan-accent);
@@ -746,9 +834,7 @@ body.dn-light-theme {
     font-family: var(--font-mono);
 }
 
-/* --------------------------------------------------------------------------
-   FORMULARIOS
-   -------------------------------------------------------------------------- */
+/* FORMULARIOS */
 .form-group {
     display: flex;
     flex-direction: column;
@@ -836,6 +922,16 @@ input:focus, select:focus, textarea:focus {
     gap: 12px;
 }
 
+.type-toggle-group.three-cols {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+    .type-toggle-group.three-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
 .radio-card input { display: none; }
 
 .radio-content {
@@ -859,9 +955,7 @@ input:focus, select:focus, textarea:focus {
     color: var(--dn-blue-primary);
 }
 
-/* --------------------------------------------------------------------------
-   BOTONES CORPORATIVOS Y ACCIONES
-   -------------------------------------------------------------------------- */
+/* BOTONES CORPORATIVOS Y ACCIONES */
 .btn-dn-primary {
     background: var(--dn-blue-primary);
     color: #ffffff;
@@ -943,9 +1037,7 @@ input:focus, select:focus, textarea:focus {
 .action-buttons-cell { display: flex; align-items: center; gap: 6px; }
 .full-width { width: 100%; }
 
-/* --------------------------------------------------------------------------
-   LISTA DE HISTORIAL Y FEED
-   -------------------------------------------------------------------------- */
+/* FEED E HISTORIAL */
 .feed-container {
     display: flex;
     flex-direction: column;
@@ -989,6 +1081,11 @@ input:focus, select:focus, textarea:focus {
     color: var(--dn-purple);
 }
 
+.tag-category.sporadic {
+    background: rgba(255, 149, 50, 0.15);
+    color: var(--dn-orange);
+}
+
 .analyst-chip {
     font-size: 0.74rem;
     font-weight: 700;
@@ -1009,9 +1106,7 @@ input:focus, select:focus, textarea:focus {
 .chip-status.in_progress { background: rgba(51, 189, 238, 0.2); color: var(--dn-blue-primary); border: 1px solid rgba(13, 92, 171, 0.3); }
 .chip-status.resolved { background: rgba(20, 168, 59, 0.15); color: var(--dn-green); }
 
-/* --------------------------------------------------------------------------
-   TABLA GENERAL ADMIN
-   -------------------------------------------------------------------------- */
+/* TABLA ADMIN */
 .metrics-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1084,7 +1179,6 @@ input:focus, select:focus, textarea:focus {
 .search-input-box input { padding: 8px 12px 8px 34px; font-size: 0.83rem; }
 .select-stylish { padding: 8px 32px 8px 12px; font-size: 0.83rem; width: auto; }
 
-/* Tabla */
 .table-container {
     overflow-x: auto;
     border-radius: var(--radius-md);
@@ -1117,9 +1211,7 @@ input:focus, select:focus, textarea:focus {
     background: var(--dn-hover-light);
 }
 
-/* --------------------------------------------------------------------------
-   DASHBOARD DE ANALYTICS
-   -------------------------------------------------------------------------- */
+/* ANALYTICS */
 .analytics-header {
     display: flex;
     justify-content: space-between;
@@ -1175,9 +1267,7 @@ input:focus, select:focus, textarea:focus {
 .chart-card-header h4 { font-size: 0.95rem; font-weight: 700; color: var(--dn-navy-secondary); display: flex; align-items: center; gap: 8px; }
 .canvas-wrapper { position: relative; height: 250px; width: 100%; }
 
-/* --------------------------------------------------------------------------
-   MODALES Y TOASTS
-   -------------------------------------------------------------------------- */
+/* MODALES Y TOASTS */
 .modal-backdrop {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(36, 51, 95, 0.6);

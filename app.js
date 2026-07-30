@@ -1,12 +1,12 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - NUBE Y SINCRONIZACIÓN EN TIEMPO REAL (APP.JS)
+   PORTAL DICHTER & NEIRA - AMBAS ANALISTAS DISPONIBLES POR DEFECTO (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v20';
-const NOVEDADES_KEY = 'dn_portal_novedades_v4';
+const STORAGE_KEY = 'dn_portal_requests_v22';
+const NOVEDADES_KEY = 'dn_portal_novedades_v6';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 
-// BASE DE DATOS EN LA NUBE PARA SINCRONIZACIÓN MULTI-DISPOSITIVO (COMPARTIDA GLOBALMENTE)
+// BASE DE DATOS EN LA NUBE PARA SINCRONIZACIÓN MULTI-DISPOSITIVO
 const SYNC_API_URL = 'https://jsonblob.com/api/jsonBlob/019fb398-a51c-79af-a1fd-c0095e6459fe';
 
 // CREDENCIALES EMAILJS
@@ -23,14 +23,6 @@ const REPORTING_TEAM_EMAILS = [
 let state = {
     requests: [],
     analystStatus: [
-        {
-            analyst: 'Mayumi Sanchez',
-            status: 'DISPONIBLE',
-            dateStart: '',
-            dateEnd: '',
-            dates: 'Disponible todo el periodo',
-            note: '🟢 Laborando en horario regular. Atendiendo solicitudes de Power BI y Encoladas.'
-        },
         {
             analyst: 'Juliana Chimbi',
             status: 'VACACIONES',
@@ -70,7 +62,7 @@ const colombianHolidays2026 = [
 ];
 
 // ==========================================================================
-// 1. INICIALIZACIÓN CON SINCRONIZACIÓN NUBE
+// 1. INICIALIZACIÓN
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -80,6 +72,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
         console.error("Error EmailJS:", e);
     }
+
+    // Splash Screen timeout
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+            splash.classList.add('splash-fade-out');
+            setTimeout(() => splash.remove(), 600);
+        }
+    }, 1800);
 
     loadFromStorage();
     loadNovedadesFromStorage();
@@ -99,10 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderVacacionesAdminTable();
     checkTodayNovelty();
 
-    // Sincronización inicial desde la nube
     fetchCloudData();
-
-    // Auto-polling cada 4 segundos
     setInterval(fetchCloudData, 4000);
 
     lucide.createIcons();
@@ -161,10 +159,8 @@ function mergeRequests(localArr, cloudArr) {
     if (!Array.isArray(cloudArr)) return localArr;
     const map = new Map();
 
-    // 1. Cargar lo local
     localArr.forEach(r => map.set(r.id, r));
 
-    // 2. Combinar con lo que viene del cloud
     cloudArr.forEach(cloudReq => {
         if (!map.has(cloudReq.id)) {
             map.set(cloudReq.id, cloudReq);
@@ -183,7 +179,6 @@ async function syncCloudData() {
     saveToStorage();
     saveNovedadesToStorage();
 
-    // Truncar dataUrl masivo base64 para mantener ligera la API REST
     const sanitizedRequests = state.requests.map(r => {
         const copy = { ...r };
         if (copy.fileDataUrl && copy.fileDataUrl.length > 150000) {
@@ -453,12 +448,18 @@ function toggleBiFields(type) {
         document.getElementById('rep-usuario').setAttribute('required', 'required');
         document.getElementById('rep-bi-name').setAttribute('required', 'required');
         document.getElementById('rep-area').removeAttribute('required');
-    } else {
+    } else if (type === 'NEW') {
         existingBlock.classList.add('hidden');
         newBlock.classList.remove('hidden');
         document.getElementById('rep-usuario').removeAttribute('required');
         document.getElementById('rep-bi-name').removeAttribute('required');
         document.getElementById('rep-area').setAttribute('required', 'required');
+    } else if (type === 'SPORADIC') {
+        existingBlock.classList.add('hidden');
+        newBlock.classList.add('hidden');
+        document.getElementById('rep-usuario').removeAttribute('required');
+        document.getElementById('rep-bi-name').removeAttribute('required');
+        document.getElementById('rep-area').removeAttribute('required');
     }
 }
 
@@ -571,10 +572,10 @@ function seedInitialMockData() {
 }
 
 function addMockData() {
-    const categories = ['ENCOLADA', 'BI_EXISTING', 'BI_NEW'];
+    const categories = ['ENCOLADA', 'BI_EXISTING', 'BI_NEW', 'BI_SPORADIC'];
     const selectedCat = categories[Math.floor(Math.random() * categories.length)];
     const paises = ['Bolivia', 'Chile', 'Colombia', 'Costa Rica', 'Ecuador', 'El Salvador', 'Guatemala', 'Honduras', 'Nicaragua', 'Panamá', 'Paraguay', 'Perú', 'República Dominicana', 'Uruguay'];
-    const estudios = ['KO moderno', 'KO tradicional', 'Lindley', 'Heineken', 'Storelive', 'P&G', 'CBC', 'ABI', 'AJE', 'Customer', 'Otros'];
+    const estudios = ['KO moderno', 'KO tradicional', 'Lindley', 'Heineken', 'Storelive', 'P&G', 'CBC', 'ABI', 'AJE', 'Otros'];
     const olas = ['Enero 2026', 'Febrero 2026', 'Marzo 2026', 'Abril 2026', 'Mayo 2026', 'Junio 2026', 'Julio 2026', 'Agosto 2026'];
     const analysts = ['Mayumi Sanchez', 'Juliana Chimbi', null];
     const selectedAnalyst = analysts[Math.floor(Math.random() * analysts.length)];
@@ -613,11 +614,14 @@ function addMockData() {
         newReq.usuario = 'analista@dichter-neira.com';
         newReq.biNameToEdit = 'Power BI Retail LatAm';
         newReq.detalle = 'Ajuste en medida DAX de precio promedio ponderado.';
-    } else {
+    } else if (selectedCat === 'BI_NEW') {
         newReq.frecuencia = 'Quincenal';
         newReq.area = 'Trade Marketing LatAm';
         newReq.solicitante = 'Gerente de Cuenta';
         newReq.detalle = 'Nuevo reporte de visualización para cliente masivo.';
+    } else {
+        newReq.solicitante = newReq.email;
+        newReq.detalle = 'Requerimiento esporádico puntual de extracción de información.';
     }
 
     state.requests.unshift(newReq);
@@ -699,18 +703,27 @@ function renderVacacionesAdminTable() {
     const tbody = document.getElementById('vacaciones-admin-table-body');
     if (!tbody) return;
 
-    if (state.analystStatus.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-muted);">No hay novedades o vacaciones registradas.</td></tr>`;
+    // Mostrar en la tabla únicamente ausencias/vacaciones/capacitaciones (excluir DISPONIBLE)
+    const activeLeaves = state.analystStatus.filter(a => a.status !== 'DISPONIBLE');
+
+    if (activeLeaves.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align:center; padding:24px; color:var(--text-muted);">
+                    No hay vacaciones o ausencias programadas actualmente.
+                    <br><small style="color:var(--dn-green); font-weight:700;">🟢 Ambas analistas (Mayumi Sanchez y Juliana Chimbi) están registradas como disponibles.</small>
+                </td>
+            </tr>
+        `;
         return;
     }
 
-    tbody.innerHTML = state.analystStatus.map((item, idx) => {
-        let badgeClass = 'available';
-        let statusLabel = '🟢 Disponible';
-        if (item.status === 'VACACIONES') {
-            badgeClass = 'vacaciones';
-            statusLabel = '🏖️ Vacaciones';
-        } else if (item.status === 'DIA_LIBRE') {
+    tbody.innerHTML = activeLeaves.map((item) => {
+        const realIdx = state.analystStatus.findIndex(a => a === item);
+        
+        let badgeClass = 'vacaciones';
+        let statusLabel = '🏖️ Vacaciones';
+        if (item.status === 'DIA_LIBRE') {
             badgeClass = 'dia_libre';
             statusLabel = '🌴 Día Libre';
         } else if (item.status === 'CAPACITACION') {
@@ -727,7 +740,7 @@ function renderVacacionesAdminTable() {
                     <br><small style="color:var(--text-muted);">${escapeHtml(item.note)}</small>
                 </td>
                 <td>
-                    <button class="btn-danger btn-sm" onclick="deleteNovedad(${idx})" title="Eliminar / Quitar Novedad">
+                    <button class="btn-danger btn-sm" onclick="deleteNovedad(${realIdx})" title="Eliminar / Quitar Novedad">
                         <i data-lucide="trash-2"></i> Eliminar
                     </button>
                 </td>
@@ -741,18 +754,16 @@ function renderVacacionesAdminTable() {
 function renderNovedades() {
     const containerAnalysts = document.getElementById('analyst-status-feed');
     if (containerAnalysts) {
-        if (state.analystStatus.length === 0) {
-            containerAnalysts.innerHTML = `<p style="text-align:center; padding:20px; color:var(--text-muted);">Todas las analistas están disponibles actualmente.</p>`;
-        } else {
-            containerAnalysts.innerHTML = state.analystStatus.map(item => {
-                const isLeave = item.status === 'VACACIONES' || item.status === 'DIA_LIBRE';
-                let statusText = '🟢 Disponible';
-                let badgeClass = 'available';
+        const teamMembers = ['Mayumi Sanchez', 'Juliana Chimbi'];
 
-                if (item.status === 'VACACIONES') {
-                    statusText = '🏖️ En Vacaciones';
-                    badgeClass = 'vacaciones';
-                } else if (item.status === 'DIA_LIBRE') {
+        containerAnalysts.innerHTML = teamMembers.map(analystName => {
+            // Buscar si la analista tiene alguna ausencia programada
+            const item = state.analystStatus.find(a => a.analyst === analystName && a.status !== 'DISPONIBLE');
+
+            if (item) {
+                let statusText = '🏖️ En Vacaciones';
+                let badgeClass = 'vacaciones';
+                if (item.status === 'DIA_LIBRE') {
                     statusText = '🌴 Día Libre';
                     badgeClass = 'dia_libre';
                 } else if (item.status === 'CAPACITACION') {
@@ -761,19 +772,33 @@ function renderNovedades() {
                 }
 
                 return `
-                    <div class="analyst-status-card ${isLeave ? 'on-leave' : 'available'}">
+                    <div class="analyst-status-card on-leave">
                         <div class="analyst-card-top">
                             <span class="analyst-name-bold">
                                 <i data-lucide="user-check"></i> ${escapeHtml(item.analyst)}
                             </span>
                             <span class="status-badge ${badgeClass}">${statusText}</span>
                         </div>
-                        <div class="analyst-note-text">${escapeHtml(item.note)}</div>
+                        <div class="analyst-note-text">${escapeHtml(item.note || 'En periodo de ausencia / vacaciones.')}</div>
                         ${item.dates ? `<div class="analyst-dates-sub">📅 ${escapeHtml(item.dates)}</div>` : ''}
                     </div>
                 `;
-            }).join('');
-        }
+            } else {
+                // Ambas analistas salen siempre disponibles por defecto si no hay vacaciones
+                return `
+                    <div class="analyst-status-card available">
+                        <div class="analyst-card-top">
+                            <span class="analyst-name-bold">
+                                <i data-lucide="user-check"></i> ${escapeHtml(analystName)}
+                            </span>
+                            <span class="status-badge available">🟢 Disponible</span>
+                        </div>
+                        <div class="analyst-note-text">🟢 Laborando en horario regular. Atendiendo solicitudes de Power BI y Encoladas.</div>
+                        <div class="analyst-dates-sub">📅 Disponible todo el periodo</div>
+                    </div>
+                `;
+            }
+        }).join('');
     }
 
     const containerHolidays = document.getElementById('holidays-container');
@@ -858,13 +883,8 @@ async function handleEncoladaSubmit(e) {
         resolvedAt: null
     };
 
-    // 1. Traer primero el estado más reciente de la nube para evitar colisiones
     await fetchCloudData();
-
-    // 2. Insertar la nueva solicitud
     state.requests.unshift(newReq);
-
-    // 3. Sincronizar inmediatamente a la nube
     await syncCloudData();
 
     document.getElementById('form-encoladas').reset();
@@ -887,9 +907,13 @@ async function handleReportingSubmit(e) {
     let fileName = fileInput?.dataset?.fileName || null;
     let fileDataUrl = fileInput?.dataset?.fileDataUrl || null;
 
+    let catName = 'BI_EXISTING';
+    if (biType === 'NEW') catName = 'BI_NEW';
+    else if (biType === 'SPORADIC') catName = 'BI_SPORADIC';
+
     const newReq = {
         id: 'REQ-' + (1000 + state.requests.length + 1),
-        category: biType === 'EXISTING' ? 'BI_EXISTING' : 'BI_NEW',
+        category: catName,
         email: email,
         estudio: estudio,
         pais: pais,
@@ -908,19 +932,16 @@ async function handleReportingSubmit(e) {
         newReq.usuario = document.getElementById('rep-usuario').value.trim();
         newReq.biNameToEdit = document.getElementById('rep-bi-name').value.trim();
         newReq.solicitante = newReq.usuario;
-    } else {
+    } else if (biType === 'NEW') {
         newReq.frecuencia = document.getElementById('rep-frecuencia').value;
         newReq.area = document.getElementById('rep-area').value.trim();
         newReq.solicitante = `Área: ${newReq.area}`;
+    } else {
+        newReq.solicitante = email;
     }
 
-    // 1. Traer primero el estado más reciente de la nube
     await fetchCloudData();
-
-    // 2. Insertar nueva solicitud
     state.requests.unshift(newReq);
-
-    // 3. Sincronizar inmediatamente a la nube
     await syncCloudData();
 
     document.getElementById('form-reporting').reset();
@@ -940,9 +961,11 @@ function sendSubmissionConfirmationEmail(req) {
     const allRecipients = [userEmail, ...REPORTING_TEAM_EMAILS];
     const recipientsStr = allRecipients.join(', ');
 
-    const subject = isEncolada 
-        ? `[Nueva Solicitud ${req.id}] Encolada PDV: ${req.estudio} (${req.pais})`
-        : `[Nueva Solicitud ${req.id}] Reporting Power BI: ${req.estudio} (${req.pais})`;
+    let catTitle = 'Reporting Power BI';
+    if (req.category === 'ENCOLADA') catTitle = 'Encolada PDV';
+    else if (req.category === 'BI_SPORADIC') catTitle = 'Solicitud Esporádica';
+
+    const subject = `[Nueva Solicitud ${req.id}] ${catTitle}: ${req.estudio} (${req.pais})`;
 
     const commitmentMsg = isEncolada
         ? '⏳ <strong>La solicitud se revisará en un máximo de 2 días hábiles (Equipo ubicado en Colombia).</strong>'
@@ -1179,10 +1202,10 @@ function renderReportingHistory() {
     const container = document.getElementById('list-reporting-history');
     if (!container) return;
 
-    const reportingReqs = state.requests.filter(r => r.category === 'BI_EXISTING' || r.category === 'BI_NEW');
+    const reportingReqs = state.requests.filter(r => r.category === 'BI_EXISTING' || r.category === 'BI_NEW' || r.category === 'BI_SPORADIC');
 
     if (reportingReqs.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">No hay solicitudes de Power BI registradas.</p>`;
+        container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">No hay solicitudes de Power BI o Esporádicas registradas.</p>`;
         return;
     }
 
@@ -1190,6 +1213,11 @@ function renderReportingHistory() {
         const isResolved = req.status === 'RESOLVED';
         const isInProgress = req.status === 'IN_PROGRESS';
         const isNew = req.category === 'BI_NEW';
+        const isSporadic = req.category === 'BI_SPORADIC';
+
+        let catLabel = 'Edición BI Existente';
+        if (isNew) catLabel = 'Power BI Nuevo';
+        if (isSporadic) catLabel = 'Solicitud Esporádica';
 
         let statusText = 'En Evaluación';
         let statusClass = 'pending';
@@ -1201,14 +1229,18 @@ function renderReportingHistory() {
             statusClass = 'in_progress';
         }
 
+        let detailHeader = `BI: ${escapeHtml(req.biNameToEdit)}`;
+        if (isNew) detailHeader = `Área: ${escapeHtml(req.area)} (Frecuencia: ${escapeHtml(req.frecuencia)})`;
+        if (isSporadic) detailHeader = `Requerimiento Esporádico`;
+
         return `
             <div class="item-card">
                 <div class="item-top">
-                    <span class="tag-category">${isNew ? 'Power BI Nuevo' : 'Edición BI Existente'}</span>
+                    <span class="tag-category ${isSporadic ? 'sporadic' : ''}">${catLabel}</span>
                     <span class="chip-status ${statusClass}">${statusText}</span>
                 </div>
                 <div style="font-size:0.85rem; font-weight:600; margin-bottom:4px;">
-                    ${isNew ? `Área: ${escapeHtml(req.area)} (Frecuencia: ${escapeHtml(req.frecuencia)})` : `BI: ${escapeHtml(req.biNameToEdit)}`}
+                    ${detailHeader}
                 </div>
                 <div style="font-size:0.8rem; color:var(--text-muted);">
                     Estudio: ${escapeHtml(req.estudio)} | País: ${escapeHtml(req.pais)}
@@ -1271,6 +1303,9 @@ function renderAdminTable() {
         } else if (req.category === 'BI_NEW') {
             categoryLabel = 'BI Nuevo';
             detailText = `Área: ${req.area}`;
+        } else if (req.category === 'BI_SPORADIC') {
+            categoryLabel = 'Esporádica';
+            detailText = 'Requerimiento Esporádico';
         }
 
         let statusText = 'Pendiente';
@@ -1290,7 +1325,7 @@ function renderAdminTable() {
         return `
             <tr>
                 <td style="font-size:0.78rem; color:var(--text-muted);">${dateStr}</td>
-                <td><span class="tag-category">${categoryLabel}</span></td>
+                <td><span class="tag-category ${req.category === 'BI_SPORADIC' ? 'sporadic' : ''}">${categoryLabel}</span></td>
                 <td>
                     <strong>${escapeHtml(detailText)}</strong>
                     ${req.fileName ? `<br style="margin-bottom:2px;">${renderFileChip(req)}` : ''}
@@ -1522,7 +1557,6 @@ function openModal(id) {
 
     document.getElementById('modalAnalyst').value = req.analyst || '';
     
-    // Configurar campos según estado actual
     const currentStatus = req.status || 'PENDING';
     document.getElementById('modalStatus').value = currentStatus;
     toggleModalStatusFields(currentStatus);

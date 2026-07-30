@@ -13,9 +13,23 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- EmailJS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=4.0">
+    <link rel="stylesheet" href="styles.css?v=5.0">
 </head>
 <body class="dn-light-theme">
+    <!-- Splash Screen Animación de Bienvenida D&N Reporting -->
+    <div id="splash-screen" class="splash-overlay">
+        <div class="splash-content">
+            <div class="splash-logo-badge">
+                <span class="splash-dn-bold">D&N</span>
+            </div>
+            <h1 class="splash-title">Dichter & Neira</h1>
+            <p class="splash-subtitle">Portal de Solicitudes • Equipo de Reporting & Operaciones</p>
+            <div class="splash-loader-bar">
+                <div class="splash-loader-fill"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Header Principal Dichter & Neira -->
     <header class="app-header">
         <div class="logo-container">
@@ -204,7 +218,6 @@
                                         <option value="CBC">CBC</option>
                                         <option value="ABI">ABI</option>
                                         <option value="AJE">AJE</option>
-                                        <option value="Customer">Customer</option>
                                         <option value="Otros">Otros</option>
                                     </select>
                                 </div>
@@ -317,12 +330,12 @@
                     <!-- Selector de Tipo de BI -->
                     <div class="type-selector-box">
                         <label class="type-option-label">Tipo de Requerimiento <span class="req">*</span></label>
-                        <div class="type-toggle-group">
+                        <div class="type-toggle-group three-cols">
                             <label class="radio-card">
                                 <input type="radio" name="biType" value="EXISTING" checked onchange="toggleBiFields('EXISTING')">
                                 <div class="radio-content">
                                     <i data-lucide="edit-3"></i>
-                                    <span>Modificación de BI Existente</span>
+                                    <span>Modificación BI Existente</span>
                                 </div>
                             </label>
                             <label class="radio-card">
@@ -330,6 +343,13 @@
                                 <div class="radio-content">
                                     <i data-lucide="sparkles"></i>
                                     <span>Power BI Nuevo</span>
+                                </div>
+                            </label>
+                            <label class="radio-card">
+                                <input type="radio" name="biType" value="SPORADIC" onchange="toggleBiFields('SPORADIC')">
+                                <div class="radio-content">
+                                    <i data-lucide="zap"></i>
+                                    <span>Solicitud Esporádica</span>
                                 </div>
                             </label>
                         </div>
@@ -362,7 +382,6 @@
                                         <option value="CBC">CBC</option>
                                         <option value="ABI">ABI</option>
                                         <option value="AJE">AJE</option>
-                                        <option value="Customer">Customer</option>
                                         <option value="Otros">Otros</option>
                                     </select>
                                 </div>
@@ -982,6 +1001,6 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-wrapper"></div>
 
-    <script src="app.js?v=4.0"></script>
+    <script src="app.js?v=5.0"></script>
 </body>
 </html>
