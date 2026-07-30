@@ -1,9 +1,9 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - GARANTÍA DE SINCRONIZACIÓN NUBE SIN COLISIONES (APP.JS)
+   PORTAL DICHTER & NEIRA - DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v25';
-const NOVEDADES_KEY = 'dn_portal_novedades_v9';
+const STORAGE_KEY = 'dn_portal_requests_v26';
+const NOVEDADES_KEY = 'dn_portal_novedades_v10';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 const MY_REQUESTS_KEY = 'dn_portal_my_submitted_ids_v1';
 
@@ -191,20 +191,15 @@ function mergeRequests(localArr, cloudArr) {
     if (!Array.isArray(cloudArr)) return localArr;
     const map = new Map();
 
-    // 1. Cargar lo local primero
     localArr.forEach(r => map.set(r.id, r));
 
-    // 2. Integrar lo que proviene de la nube sin sobrescribir binarios locales
     cloudArr.forEach(cloudReq => {
         if (!map.has(cloudReq.id)) {
             map.set(cloudReq.id, cloudReq);
         } else {
             const localReq = map.get(cloudReq.id);
-            let bestFileUrl = cloudReq.fileDataUrl;
-            if (localReq.fileDataUrl && localReq.fileDataUrl !== 'ATTACHMENT_AVAILABLE') {
-                bestFileUrl = localReq.fileDataUrl;
-            }
-            map.set(cloudReq.id, { ...cloudReq, ...localReq, fileDataUrl: bestFileUrl });
+            const bestFileUrl = cloudReq.fileDataUrl || localReq.fileDataUrl;
+            map.set(cloudReq.id, { ...localReq, ...cloudReq, fileDataUrl: bestFileUrl });
         }
     });
 
@@ -217,11 +212,11 @@ async function syncCloudData() {
     saveToStorage();
     saveNovedadesToStorage();
 
-    // Sanitizar adjuntos pesados para evitar error HTTP 413 Payload Too Large en el servidor JSONBlob
+    // Permitir guardar archivos adjuntos en la nube hasta 250KB para descargas directas
     const sanitizedRequests = state.requests.map(r => {
         const copy = { ...r };
-        if (copy.fileDataUrl && copy.fileDataUrl.length > 50000) {
-            copy.fileDataUrl = 'ATTACHMENT_AVAILABLE';
+        if (copy.fileDataUrl && copy.fileDataUrl.length > 250000) {
+            copy.fileDataUrl = null;
         }
         return copy;
     });
@@ -240,7 +235,7 @@ async function syncCloudData() {
         });
 
         if (!resp.ok) {
-            console.warn("Reintentando sincronización con paquete ligero...");
+            console.warn("Reintentando sincronización con metadatos de respaldo...");
             const minReqs = state.requests.map(r => ({ ...r, fileDataUrl: null }));
             await fetch(SYNC_API_URL, {
                 method: 'PUT',
@@ -255,8 +250,44 @@ async function syncCloudData() {
 }
 
 // ==========================================================================
-// 3. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS SIN CORRUPCIÓN BINARIA
+// 3. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS CON COMPRESIÓN DE IMÁGENES
 // ==========================================================================
+function compressImageFile(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1200;
+
+            if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+            callback(compressedDataUrl);
+        };
+        img.onerror = function() {
+            callback(e.target.result);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
 function handleFileSelect(inputElem, targetInfoId) {
     const target = document.getElementById(targetInfoId);
     if (!target) return;
@@ -266,20 +297,35 @@ function handleFileSelect(inputElem, targetInfoId) {
         const isImage = file.type.startsWith('image/');
         const iconName = isImage ? 'image' : 'file-spreadsheet';
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            inputElem.dataset.fileDataUrl = e.target.result;
-            inputElem.dataset.fileName = file.name;
+        if (isImage) {
+            compressImageFile(file, function(compressedDataUrl) {
+                inputElem.dataset.fileDataUrl = compressedDataUrl;
+                inputElem.dataset.fileName = file.name;
 
-            target.innerHTML = `
-                <span class="file-attached-chip clickable">
-                    <i data-lucide="${iconName}"></i>
-                    <span>Adjunto preparado: <strong>${escapeHtml(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)</span>
-                </span>
-            `;
-            lucide.createIcons();
-        };
-        reader.readAsDataURL(file);
+                target.innerHTML = `
+                    <span class="file-attached-chip clickable">
+                        <i data-lucide="${iconName}"></i>
+                        <span>Adjunto listo: <strong>${escapeHtml(file.name)}</strong> (Descarga habilitada)</span>
+                    </span>
+                `;
+                lucide.createIcons();
+            });
+        } else {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                inputElem.dataset.fileDataUrl = e.target.result;
+                inputElem.dataset.fileName = file.name;
+
+                target.innerHTML = `
+                    <span class="file-attached-chip clickable">
+                        <i data-lucide="${iconName}"></i>
+                        <span>Adjunto preparado: <strong>${escapeHtml(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)</span>
+                    </span>
+                `;
+                lucide.createIcons();
+            };
+            reader.readAsDataURL(file);
+        }
     } else {
         inputElem.dataset.fileDataUrl = '';
         inputElem.dataset.fileName = '';
@@ -313,7 +359,7 @@ function downloadRequestFile(reqId) {
         return;
     }
 
-    if (req.fileDataUrl && req.fileDataUrl !== 'ATTACHMENT_AVAILABLE') {
+    if (req.fileDataUrl) {
         const blob = dataURLtoBlob(req.fileDataUrl);
         if (blob) {
             const url = URL.createObjectURL(blob);
@@ -324,12 +370,12 @@ function downloadRequestFile(reqId) {
             link.click();
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showToast(`Descargando archivo original: ${req.fileName}`, 'success');
+            showToast(`Descargando archivo adjunto: ${req.fileName}`, 'success');
             return;
         }
     }
 
-    showToast(`📎 Archivo adjunto registrado: "${req.fileName}". Enviado en la notificación por correo.`, 'info');
+    showToast(`⚠️ Este registro no posee un binario guardado en la nube para descargar.`, 'warning');
 }
 
 function renderFileChip(req) {
@@ -338,7 +384,7 @@ function renderFileChip(req) {
     const iconName = isImage ? 'image' : 'file-spreadsheet';
 
     return `
-        <button type="button" class="file-attached-chip clickable" onclick="downloadRequestFile('${req.id}')" title="Haz clic para descargar ${escapeHtml(req.fileName)} sin daños">
+        <button type="button" class="file-attached-chip clickable" onclick="downloadRequestFile('${req.id}')" title="Haz clic para descargar ${escapeHtml(req.fileName)} en tu PC">
             <i data-lucide="${iconName}"></i>
             <span>📎 ${escapeHtml(req.fileName)}</span>
             <i data-lucide="download" style="width:12px; margin-left:4px;"></i>
