@@ -1,10 +1,11 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - AMBAS ANALISTAS DISPONIBLES POR DEFECTO (APP.JS)
+   PORTAL DICHTER & NEIRA - HISTORIAL FILTRADO POR EQUIPO / COMPUTADOR (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v22';
-const NOVEDADES_KEY = 'dn_portal_novedades_v6';
+const STORAGE_KEY = 'dn_portal_requests_v24';
+const NOVEDADES_KEY = 'dn_portal_novedades_v8';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
+const MY_REQUESTS_KEY = 'dn_portal_my_submitted_ids_v1';
 
 // BASE DE DATOS EN LA NUBE PARA SINCRONIZACIÓN MULTI-DISPOSITIVO
 const SYNC_API_URL = 'https://jsonblob.com/api/jsonBlob/019fb398-a51c-79af-a1fd-c0095e6459fe';
@@ -62,7 +63,31 @@ const colombianHolidays2026 = [
 ];
 
 // ==========================================================================
-// 1. INICIALIZACIÓN
+// REGISTRO DE SOLICITUDES PROPIAS EN ESTE COMPUTADOR
+// ==========================================================================
+function getMySubmittedIds() {
+    try {
+        const raw = localStorage.getItem(MY_REQUESTS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function recordMySubmittedId(id) {
+    try {
+        const list = getMySubmittedIds();
+        if (!list.includes(id)) {
+            list.unshift(id);
+            localStorage.setItem(MY_REQUESTS_KEY, JSON.stringify(list));
+        }
+    } catch (e) {
+        console.error("Error al registrar id local:", e);
+    }
+}
+
+// ==========================================================================
+// 1. INICIALIZACIÓN CON ANIMACIÓN SPLASH DE BIENVENIDA
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -73,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Error EmailJS:", e);
     }
 
-    // Splash Screen timeout
+    // Ocultar la animación de splash screen tras 1.8 segundos
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if (splash) {
@@ -166,7 +191,8 @@ function mergeRequests(localArr, cloudArr) {
             map.set(cloudReq.id, cloudReq);
         } else {
             const localReq = map.get(cloudReq.id);
-            map.set(cloudReq.id, { ...localReq, ...cloudReq });
+            const fileDataUrl = cloudReq.fileDataUrl || localReq.fileDataUrl;
+            map.set(cloudReq.id, { ...localReq, ...cloudReq, fileDataUrl: fileDataUrl });
         }
     });
 
@@ -179,16 +205,8 @@ async function syncCloudData() {
     saveToStorage();
     saveNovedadesToStorage();
 
-    const sanitizedRequests = state.requests.map(r => {
-        const copy = { ...r };
-        if (copy.fileDataUrl && copy.fileDataUrl.length > 150000) {
-            copy.fileDataUrl = null;
-        }
-        return copy;
-    });
-
     const payload = {
-        requests: sanitizedRequests,
+        requests: state.requests,
         analystStatus: state.analystStatus,
         lastUpdated: new Date().toISOString()
     };
@@ -206,7 +224,7 @@ async function syncCloudData() {
 }
 
 // ==========================================================================
-// 3. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS
+// 3. DESCARGA DIRECTA DE ARCHIVOS ADJUNTOS SIN CORRUPCIÓN BINARIA
 // ==========================================================================
 function handleFileSelect(inputElem, targetInfoId) {
     const target = document.getElementById(targetInfoId);
@@ -238,35 +256,49 @@ function handleFileSelect(inputElem, targetInfoId) {
     }
 }
 
+function dataURLtoBlob(dataurl) {
+    if (!dataurl || typeof dataurl !== 'string' || !dataurl.includes(',')) return null;
+    try {
+        const arr = dataurl.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    } catch (e) {
+        console.error("Error al convertir DataURL a Blob:", e);
+        return null;
+    }
+}
+
 function downloadRequestFile(reqId) {
     const req = state.requests.find(r => r.id === reqId);
     if (!req || !req.fileName) {
-        showToast('No se encontró archivo adjunto para esta solicitud', 'warning');
+        showToast('No se encontró información del archivo adjunto', 'warning');
         return;
     }
 
     if (req.fileDataUrl) {
-        const link = document.createElement('a');
-        link.href = req.fileDataUrl;
-        link.download = req.fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast(`Descargando: ${req.fileName}`, 'success');
-    } else {
-        const isCsv = req.fileName.endsWith('.csv');
-        const content = `ID_Solicitud,Categoria,Estudio,Pais,Detalle,Fecha\n${req.id},"${req.category}","${req.estudio}","${req.pais}","${(req.detalle || '').replace(/"/g, '""')}",${new Date().toISOString().slice(0,10)}`;
-        const blob = new Blob([content], { type: isCsv ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = req.fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        showToast(`Descargando archivo adjunto: ${req.fileName}`, 'success');
+        const blob = dataURLtoBlob(req.fileDataUrl);
+        if (blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = req.fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast(`Descargando archivo original: ${req.fileName}`, 'success');
+            return;
+        }
     }
+
+    showToast(`⚠️ El archivo demo "${req.fileName}" no contiene un binario cargado real.`, 'warning');
 }
 
 function renderFileChip(req) {
@@ -275,7 +307,7 @@ function renderFileChip(req) {
     const iconName = isImage ? 'image' : 'file-spreadsheet';
 
     return `
-        <button type="button" class="file-attached-chip clickable" onclick="downloadRequestFile('${req.id}')" title="Haz clic para descargar ${escapeHtml(req.fileName)}">
+        <button type="button" class="file-attached-chip clickable" onclick="downloadRequestFile('${req.id}')" title="Haz clic para descargar ${escapeHtml(req.fileName)} sin daños">
             <i data-lucide="${iconName}"></i>
             <span>📎 ${escapeHtml(req.fileName)}</span>
             <i data-lucide="download" style="width:12px; margin-left:4px;"></i>
@@ -517,7 +549,7 @@ function seedInitialMockData() {
             solicitante: 'Carlos Mendoza',
             analyst: 'Mayumi Sanchez',
             detalle: 'Cierre de lote bloqueado en 2 terminales por error 502.',
-            fileName: 'Reporte_Captura_KO.xlsx',
+            fileName: null,
             fileDataUrl: null,
             status: 'RESOLVED',
             ticketNumber: 'TCK-DN-2026-9011',
@@ -559,7 +591,7 @@ function seedInitialMockData() {
             solicitante: 'Mariana López',
             analyst: 'Mayumi Sanchez',
             detalle: 'Desarrollar tablero interactivo semanal de seguimiento de precios.',
-            fileName: 'Maqueta_PowerBI_PG.png',
+            fileName: null,
             fileDataUrl: null,
             status: 'PENDING',
             ticketNumber: null,
@@ -625,6 +657,7 @@ function addMockData() {
     }
 
     state.requests.unshift(newReq);
+    recordMySubmittedId(newReq.id);
     syncCloudData();
     renderAll();
     showToast('Solicitud simulada agregada y sincronizada', 'success');
@@ -703,7 +736,6 @@ function renderVacacionesAdminTable() {
     const tbody = document.getElementById('vacaciones-admin-table-body');
     if (!tbody) return;
 
-    // Mostrar en la tabla únicamente ausencias/vacaciones/capacitaciones (excluir DISPONIBLE)
     const activeLeaves = state.analystStatus.filter(a => a.status !== 'DISPONIBLE');
 
     if (activeLeaves.length === 0) {
@@ -757,7 +789,6 @@ function renderNovedades() {
         const teamMembers = ['Mayumi Sanchez', 'Juliana Chimbi'];
 
         containerAnalysts.innerHTML = teamMembers.map(analystName => {
-            // Buscar si la analista tiene alguna ausencia programada
             const item = state.analystStatus.find(a => a.analyst === analystName && a.status !== 'DISPONIBLE');
 
             if (item) {
@@ -784,7 +815,6 @@ function renderNovedades() {
                     </div>
                 `;
             } else {
-                // Ambas analistas salen siempre disponibles por defecto si no hay vacaciones
                 return `
                     <div class="analyst-status-card available">
                         <div class="analyst-card-top">
@@ -885,6 +915,7 @@ async function handleEncoladaSubmit(e) {
 
     await fetchCloudData();
     state.requests.unshift(newReq);
+    recordMySubmittedId(newReq.id);
     await syncCloudData();
 
     document.getElementById('form-encoladas').reset();
@@ -942,6 +973,7 @@ async function handleReportingSubmit(e) {
 
     await fetchCloudData();
     state.requests.unshift(newReq);
+    recordMySubmittedId(newReq.id);
     await syncCloudData();
 
     document.getElementById('form-reporting').reset();
@@ -1096,7 +1128,7 @@ function sendResolutionTicketEmail(req) {
 }
 
 // ==========================================================================
-// 10. RENDERIZADO DE TABLAS E HISTORIALES CON LINKS DE DESCARGA
+// 10. RENDERIZADO DE TABLAS E HISTORIALES FILTRADOS POR USUARIO LOCAL
 // ==========================================================================
 function renderMiniDashboard() {
     const containerTotal = document.getElementById('dash-total-count');
@@ -1144,14 +1176,26 @@ function renderFieldHistory() {
     const container = document.getElementById('list-encoladas-history');
     if (!container) return;
 
-    const encoladas = state.requests.filter(r => r.category === 'ENCOLADA');
+    const myIds = getMySubmittedIds();
 
-    if (encoladas.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">No hay encoladas registradas.</p>`;
+    // Solo se muestran las solicitudes que se hayan creado desde este computador (o todas si es admin autenticado)
+    const myEncoladas = state.requests.filter(r => 
+        r.category === 'ENCOLADA' && (myIds.includes(r.id) || state.isReportingAuthenticated)
+    );
+
+    if (myEncoladas.length === 0) {
+        container.innerHTML = `
+            <div style="color:var(--text-muted); text-align:center; padding:30px 15px;">
+                <i data-lucide="inbox" style="width:32px; height:32px; stroke-width:1.5; margin-bottom:8px; opacity:0.5; color:var(--dn-blue-primary);"></i>
+                <p style="font-size:0.85rem; font-weight:600; color:var(--text-dark); margin-bottom:4px;">Sin encoladas en este equipo</p>
+                <small style="font-size:0.78rem; display:block; line-height:1.3; color:var(--text-muted);">Las solicitudes de encoladas que envíes desde tu computador aparecerán aquí para que consultes su estado en tiempo real.</small>
+            </div>
+        `;
+        lucide.createIcons();
         return;
     }
 
-    container.innerHTML = encoladas.map(req => {
+    container.innerHTML = myEncoladas.map(req => {
         const isResolved = req.status === 'RESOLVED';
         const isInProgress = req.status === 'IN_PROGRESS';
 
@@ -1202,14 +1246,27 @@ function renderReportingHistory() {
     const container = document.getElementById('list-reporting-history');
     if (!container) return;
 
-    const reportingReqs = state.requests.filter(r => r.category === 'BI_EXISTING' || r.category === 'BI_NEW' || r.category === 'BI_SPORADIC');
+    const myIds = getMySubmittedIds();
 
-    if (reportingReqs.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">No hay solicitudes de Power BI o Esporádicas registradas.</p>`;
+    // Solo se muestran las solicitudes de Reporting enviadas desde ESTE computador (o todas si es admin autenticado)
+    const myReportingReqs = state.requests.filter(r => 
+        (r.category === 'BI_EXISTING' || r.category === 'BI_NEW' || r.category === 'BI_SPORADIC') &&
+        (myIds.includes(r.id) || state.isReportingAuthenticated)
+    );
+
+    if (myReportingReqs.length === 0) {
+        container.innerHTML = `
+            <div style="color:var(--text-muted); text-align:center; padding:30px 15px;">
+                <i data-lucide="inbox" style="width:32px; height:32px; stroke-width:1.5; margin-bottom:8px; opacity:0.5; color:var(--dn-blue-primary);"></i>
+                <p style="font-size:0.85rem; font-weight:600; color:var(--text-dark); margin-bottom:4px;">Sin solicitudes en este equipo</p>
+                <small style="font-size:0.78rem; display:block; line-height:1.3; color:var(--text-muted);">Las solicitudes a Reporting que envíes desde tu computador aparecerán aquí para consultar su avance.</small>
+            </div>
+        `;
+        lucide.createIcons();
         return;
     }
 
-    container.innerHTML = reportingReqs.map(req => {
+    container.innerHTML = myReportingReqs.map(req => {
         const isResolved = req.status === 'RESOLVED';
         const isInProgress = req.status === 'IN_PROGRESS';
         const isNew = req.category === 'BI_NEW';
