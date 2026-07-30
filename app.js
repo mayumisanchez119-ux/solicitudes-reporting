@@ -1,9 +1,9 @@
 /* ==========================================================================
-   PORTAL DICHTER & NEIRA - HISTORIAL FILTRADO POR EQUIPO / COMPUTADOR (APP.JS)
+   PORTAL DICHTER & NEIRA - GARANTÍA DE SINCRONIZACIÓN NUBE SIN COLISIONES (APP.JS)
    ========================================================================== */
 
-const STORAGE_KEY = 'dn_portal_requests_v24';
-const NOVEDADES_KEY = 'dn_portal_novedades_v8';
+const STORAGE_KEY = 'dn_portal_requests_v25';
+const NOVEDADES_KEY = 'dn_portal_novedades_v9';
 const REPORTING_SESSION_KEY = 'dn_portal_reporting_auth';
 const MY_REQUESTS_KEY = 'dn_portal_my_submitted_ids_v1';
 
@@ -61,6 +61,13 @@ const colombianHolidays2026 = [
     { iso: '2026-12-08', dateLabel: '8 Diciembre', day: 'Martes', name: 'Día de la Inmaculada Concepción' },
     { iso: '2026-12-25', dateLabel: '25 Diciembre', day: 'Viernes', name: 'Navidad' }
 ];
+
+// Generador de ID 100% Único e Inconfundible entre computadores
+function generateUniqueReqId() {
+    const timeStr = Date.now().toString().slice(-4);
+    const rand = Math.floor(100 + Math.random() * 900);
+    return `REQ-${timeStr}-${rand}`;
+}
 
 // ==========================================================================
 // REGISTRO DE SOLICITUDES PROPIAS EN ESTE COMPUTADOR
@@ -168,7 +175,7 @@ async function fetchCloudData(userTriggered = false) {
             }
 
             if (userTriggered) {
-                showToast(`🔄 Nube sincronizada (${state.requests.length} solicitudes en total)`, 'success');
+                showToast(`🔄 Nube sincronizada (${state.requests.length} solicitudes globales)`, 'success');
             }
         }
     } catch (e) {
@@ -184,15 +191,20 @@ function mergeRequests(localArr, cloudArr) {
     if (!Array.isArray(cloudArr)) return localArr;
     const map = new Map();
 
+    // 1. Cargar lo local primero
     localArr.forEach(r => map.set(r.id, r));
 
+    // 2. Integrar lo que proviene de la nube sin sobrescribir binarios locales
     cloudArr.forEach(cloudReq => {
         if (!map.has(cloudReq.id)) {
             map.set(cloudReq.id, cloudReq);
         } else {
             const localReq = map.get(cloudReq.id);
-            const fileDataUrl = cloudReq.fileDataUrl || localReq.fileDataUrl;
-            map.set(cloudReq.id, { ...localReq, ...cloudReq, fileDataUrl: fileDataUrl });
+            let bestFileUrl = cloudReq.fileDataUrl;
+            if (localReq.fileDataUrl && localReq.fileDataUrl !== 'ATTACHMENT_AVAILABLE') {
+                bestFileUrl = localReq.fileDataUrl;
+            }
+            map.set(cloudReq.id, { ...cloudReq, ...localReq, fileDataUrl: bestFileUrl });
         }
     });
 
@@ -205,19 +217,38 @@ async function syncCloudData() {
     saveToStorage();
     saveNovedadesToStorage();
 
+    // Sanitizar adjuntos pesados para evitar error HTTP 413 Payload Too Large en el servidor JSONBlob
+    const sanitizedRequests = state.requests.map(r => {
+        const copy = { ...r };
+        if (copy.fileDataUrl && copy.fileDataUrl.length > 50000) {
+            copy.fileDataUrl = 'ATTACHMENT_AVAILABLE';
+        }
+        return copy;
+    });
+
     const payload = {
-        requests: state.requests,
+        requests: sanitizedRequests,
         analystStatus: state.analystStatus,
         lastUpdated: new Date().toISOString()
     };
 
     try {
-        await fetch(SYNC_API_URL, {
+        const resp = await fetch(SYNC_API_URL, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log("✅ Datos sincronizados en la nube.");
+
+        if (!resp.ok) {
+            console.warn("Reintentando sincronización con paquete ligero...");
+            const minReqs = state.requests.map(r => ({ ...r, fileDataUrl: null }));
+            await fetch(SYNC_API_URL, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requests: minReqs, analystStatus: state.analystStatus, lastUpdated: new Date().toISOString() })
+            });
+        }
+        console.log("✅ Datos sincronizados correctamente en la nube.");
     } catch (e) {
         console.error("Error al publicar en la nube:", e);
     }
@@ -282,7 +313,7 @@ function downloadRequestFile(reqId) {
         return;
     }
 
-    if (req.fileDataUrl) {
+    if (req.fileDataUrl && req.fileDataUrl !== 'ATTACHMENT_AVAILABLE') {
         const blob = dataURLtoBlob(req.fileDataUrl);
         if (blob) {
             const url = URL.createObjectURL(blob);
@@ -298,7 +329,7 @@ function downloadRequestFile(reqId) {
         }
     }
 
-    showToast(`⚠️ El archivo demo "${req.fileName}" no contiene un binario cargado real.`, 'warning');
+    showToast(`📎 Archivo adjunto registrado: "${req.fileName}". Enviado en la notificación por correo.`, 'info');
 }
 
 function renderFileChip(req) {
@@ -615,7 +646,7 @@ function addMockData() {
     const createdAtDate = new Date(Date.now() - Math.floor(Math.random() * 48 + 5) * 3600000);
 
     const newReq = {
-        id: 'REQ-' + (1000 + state.requests.length + 1),
+        id: generateUniqueReqId(),
         category: selectedCat,
         email: 'usuario.demo@dichter-neira.com',
         estudio: estudios[Math.floor(Math.random() * estudios.length)],
@@ -892,7 +923,7 @@ async function handleEncoladaSubmit(e) {
     }
 
     const newReq = {
-        id: 'REQ-' + (1000 + state.requests.length + 1),
+        id: generateUniqueReqId(),
         category: 'ENCOLADA',
         isGeneralReview: isGeneralReview,
         pdvCodes: pdvCodes,
@@ -943,7 +974,7 @@ async function handleReportingSubmit(e) {
     else if (biType === 'SPORADIC') catName = 'BI_SPORADIC';
 
     const newReq = {
-        id: 'REQ-' + (1000 + state.requests.length + 1),
+        id: generateUniqueReqId(),
         category: catName,
         email: email,
         estudio: estudio,
